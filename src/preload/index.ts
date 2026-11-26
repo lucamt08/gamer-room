@@ -10,6 +10,8 @@ import type {
   FwsStatus,
   Game,
   GamePatch,
+  OverlayAction,
+  OverlayInfo,
   RunningState,
   SgdbGrid,
   SgdbSearchResult,
@@ -75,6 +77,11 @@ const api = {
   /** Demande l'autorisation administrateur (une seule fois) pour lancer Flawless Widescreen. */
   fwsAuthorize: (): Promise<FwsStatus> => ipcRenderer.invoke(IPC.fwsAuthorize),
   fwsPickFolder: (): Promise<FwsStatus> => ipcRenderer.invoke(IPC.fwsPickFolder),
+
+  // --- Menu en jeu (bouton Guide / PS maintenu) ---
+  /** Le menu vient de s'ouvrir par-dessus le jeu. */
+  onOverlayOpened: (cb: (info: OverlayInfo) => void) => listen(IPC.overlayOpened, cb),
+  overlayAction: (action: OverlayAction): Promise<void> => ipcRenderer.invoke(IPC.overlayAction, action),
 
   getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.getVersion)
 }

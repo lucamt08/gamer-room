@@ -120,7 +120,22 @@ export interface Settings {
   gamepadSpeed: number
   /** Manette : accélérer quand on maintient la direction longtemps ? */
   gamepadAcceleration: boolean
+  /**
+   * Bouton Guide (Xbox) / PS (PlayStation) : un appui ouvre Gamer Room en plein écran,
+   * un appui long en jeu ouvre le menu sur le côté (voir guideButton.ts et gameOverlay.ts).
+   */
+  guideButton: boolean
 }
+
+/** Ce que le menu en jeu affiche (envoyé par le main à chaque ouverture du menu). */
+export interface OverlayInfo {
+  game: Game
+  /** Moment où le jeu a été lancé (millisecondes, comme Date.now()). */
+  startedAt: number
+}
+
+/** Les choix du menu en jeu. */
+export type OverlayAction = 'resume' | 'fullscreen' | 'quit'
 
 /** Un résultat de recherche SteamGridDB (un jeu). */
 export interface SgdbGame {

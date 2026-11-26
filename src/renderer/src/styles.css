@@ -1298,3 +1298,144 @@ input[type='range']:focus-visible {
 .steam-name {
   flex: 1;
 }
+
+/* ==========================================================================
+   Menu en jeu (appui long sur le bouton Xbox / PS) — fenêtre transparente
+   par-dessus le jeu. Effets volontairement légers : le jeu tourne derrière.
+   ========================================================================== */
+
+html.overlay-window,
+html.overlay-window body {
+  background: transparent;
+}
+
+.game-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+}
+
+/* Le jeu reste visible à gauche, assombri */
+.game-overlay-backdrop {
+  flex: 1;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.6));
+  animation: overlay-fade 0.2s ease-out;
+}
+
+.game-overlay-panel {
+  width: clamp(320px, 26vw, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 40px 32px;
+  background: rgba(10, 13, 20, 0.96);
+  border-left: 1px solid var(--border);
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+  animation: overlay-slide 0.22s ease-out;
+}
+
+.game-overlay-clock {
+  align-self: flex-end;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.game-overlay-game {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.game-overlay-game h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.game-overlay-game .hint {
+  margin: 0;
+  font-size: 14px;
+}
+
+.game-overlay-cover {
+  flex: none;
+  width: 72px;
+  height: 108px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.game-overlay-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-overlay-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-overlay-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.game-overlay-item.selected {
+  border-color: var(--accent);
+  background: #1c2436;
+}
+
+.game-overlay-item.danger.selected {
+  border-color: var(--danger);
+}
+
+.game-overlay-icon {
+  width: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.game-overlay-item.selected .game-overlay-icon {
+  color: var(--accent);
+}
+
+.game-overlay-item.danger.selected .game-overlay-icon {
+  color: var(--danger);
+}
+
+.game-overlay-help {
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@keyframes overlay-slide {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+}

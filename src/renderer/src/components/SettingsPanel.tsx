@@ -214,6 +214,18 @@ const SettingsPanel = forwardRef<HTMLDivElement, Props>(function SettingsPanel({
               />
               Accélérer quand je maintiens la direction longtemps
             </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.guideButton}
+                onChange={(e) => update({ guideButton: e.target.checked })}
+              />
+              Bouton Xbox / PS : ouvrir Gamer Room en plein écran, et le maintenir en jeu pour le menu
+            </label>
+            <p className="hint">
+              Manette Xbox : pour que Windows n'ouvre pas aussi la Xbox Game Bar, désactive « Ouvrir la Game Bar avec ce
+              bouton sur une manette » dans Paramètres Windows › Jeux › Game Bar.
+            </p>
           </>
         )}
 
