@@ -67,7 +67,9 @@ La publication est faite par `.github/workflows/release.yml` : `npm run dist`, p
 avec l'installateur, le `.blockmap` et `latest.yml`. Ne pas utiliser `electron-builder --publish always`
 (course entre les envois qui perd l'installateur quand la Release n'existe pas encore).
 
-Publier une version : `npm version X.Y.Z` puis `git push --follow-tags` (voir README). La GitHub Action
+Publier une version (`main` est protégée, PR obligatoire, voir README) : sur une branche,
+`npm version X.Y.Z --no-git-tag-version` → commit → PR → merge ; puis sur `main` à jour,
+`git tag vX.Y.Z` et `git push origin vX.Y.Z`. La GitHub Action
 vérifie que le tag = la version de package.json, construit l'installateur et publie la Release ;
 les applis installées proposent la mise à jour.
 
@@ -75,7 +77,7 @@ les applis installées proposent la mise à jour.
 
 1. **Ne JAMAIS commiter de clé API, mot de passe, token ou fichier `settings.json`.** La clé SteamGridDB vit
    uniquement dans `userData` sur le PC de chacun. Vérifier `git status` / `git diff --staged` avant chaque commit.
-2. **Ne jamais travailler directement sur `main`.** Créer une branche (`git checkout -b nom-de-la-tache`),
+2. **Ne jamais travailler directement sur `main`** (elle est protégée : un push direct est refusé). Créer une branche (`git checkout -b nom-de-la-tache`),
    commiter dessus, pousser, puis ouvrir une Pull Request (`gh pr create`).
 3. **Tester avant de commiter** : `npm run typecheck` + vérifier dans `npm run dev` que la fonctionnalité marche.
 4. Demander confirmation avant toute action irréversible ou visible par l'autre (push, merge, tag, release, suppression).
