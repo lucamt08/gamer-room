@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   steamGridDbApiKey: '',
   killShortcut: 'Ctrl+Alt+F4',
   startFullscreen: false,
+  trackOutsideApp: true, // compter le temps de jeu même hors de Gamer Room (démarre avec Windows)
   ...DEFAULT_SCROLL_SETTINGS // molette, glisser, manette (voir shared/scroll.ts)
 }
 

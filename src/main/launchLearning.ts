@@ -16,6 +16,12 @@ export function samePath(a: string | null | undefined, b: string | null | undefi
   return !!a && !!b && a.toLowerCase() === b.toLowerCase()
 }
 
+/** Le chemin est-il dans ce dossier (ou un de ses sous-dossiers) ? */
+export function isInside(path: string, folder: string): boolean {
+  const base = folder.toLowerCase().replace(/\\+$/, '') + '\\'
+  return path.toLowerCase().startsWith(base)
+}
+
 /** Cherche le vrai nom + la jaquette si le jeu porte le nom de son launcher. Renvoie le jeu à jour. */
 export async function fixNameIfFromLauncher(gameId: string): Promise<Game | null> {
   const game = getGame(gameId)

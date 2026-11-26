@@ -1,5 +1,5 @@
 // Écran "Paramètres", en trois onglets :
-//  - Général         : clé SteamGridDB, raccourci de fermeture, plein écran, son du défilement ;
+//  - Général         : clé SteamGridDB, raccourci de fermeture, plein écran, son du défilement, temps de jeu ;
 //  - Clavier / Souris : vitesse et accélération de la molette, glisser à la souris ;
 //  - Manette         : vitesse et accélération quand on maintient une direction.
 // Un seul bouton "Enregistrer" pour tous les onglets.
@@ -131,6 +131,21 @@ const SettingsPanel = forwardRef<HTMLDivElement, Props>(function SettingsPanel({
               maxLabel="Fort"
               disabled={!settings.scrollSound}
             />
+
+            <h3 className="form-section">Temps de jeu</h3>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.trackOutsideApp}
+                onChange={(e) => update({ trackOutsideApp: e.target.checked })}
+              />
+              Compter le temps de jeu même quand le jeu n'est pas lancé depuis Gamer Room
+            </label>
+            <p className="hint">
+              Gamer Room démarre alors avec Windows et reste près de l'horloge : la croix cache le hub sans le
+              quitter. Pour la fermer vraiment : clic droit sur son icône → Quitter. Les jeux Steam sont toujours
+              à jour (leur temps vient de Steam).
+            </p>
           </>
         )}
 

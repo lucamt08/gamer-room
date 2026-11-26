@@ -164,6 +164,19 @@ export function updateGame(id: string, patch: GamePatch | Partial<Game>): Game {
   return game
 }
 
+/**
+ * Ajoute du temps de jeu compté par Gamer Room (en secondes) et note la date de la partie.
+ * Renvoie le jeu à jour, ou null s'il a été supprimé entre-temps.
+ */
+export function addPlaytime(id: string, seconds: number): Game | null {
+  const game = getGame(id)
+  if (!game) return null
+  game.playtimeSeconds = Math.round((game.playtimeSeconds ?? 0) + seconds)
+  game.lastPlayedAt = new Date().toISOString()
+  save()
+  return game
+}
+
 /** Supprime un jeu de la bibliothèque (et sa jaquette en cache). Le jeu lui-même n'est PAS désinstallé. */
 export function removeGame(id: string): void {
   const game = getGame(id)

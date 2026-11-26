@@ -24,13 +24,13 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { BrowserWindow } from 'electron'
 import type { Game, RunningState } from '@shared/types'
 import { shouldSkipLauncher } from '@shared/launch'
 import * as wm from './windowManager'
 import { ensureLaunchInfo, updateGame } from './library'
 import { removeRunAsAdmin } from './compatFlags'
-import { fixNameIfFromLauncher, learnFromGameWindow, samePath } from './launchLearning'
+import { fixNameIfFromLauncher, isInside, learnFromGameWindow, samePath } from './launchLearning'
+import { getHub } from './hub'
 
 // Réglages du suivi (en millisecondes)
 const SEARCH_TIMEOUT = 30_000 // jeu "normal" : on cherche la fenêtre pendant 30 s max
@@ -71,12 +71,10 @@ interface Session {
 }
 
 let session: Session | null = null
-let hubWindow: BrowserWindow | null = null
 let notify: (state: RunningState) => void = () => {}
 
-/** À appeler une fois au démarrage : on donne la fenêtre du hub et une fonction pour prévenir l'interface. */
-export function initGameLauncher(window: BrowserWindow, onState: (state: RunningState) => void): void {
-  hubWindow = window
+/** À appeler une fois au démarrage : on donne une fonction pour prévenir l'interface. */
+export function initGameLauncher(onState: (state: RunningState) => void): void {
   notify = onState
 }
 
@@ -230,12 +228,6 @@ function pathOf(s: Session, pid: number): string | null {
   return s.paths.get(pid) ?? null
 }
 
-/** Le chemin est-il dans ce dossier (ou un de ses sous-dossiers) ? */
-function isInside(path: string, folder: string): boolean {
-  const base = folder.toLowerCase().replace(/\\+$/, '') + '\\'
-  return path.toLowerCase().startsWith(base)
-}
-
 const area = (w: wm.WindowInfo): number => (w.rect.right - w.rect.left) * (w.rect.bottom - w.rect.top)
 
 /** Une fenêtre qui couvre presque tout l'écran : c'est un jeu, pas un petit launcher. */
@@ -302,7 +294,7 @@ function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.Win
 function hideHubSoon(s: Session): void {
   const wait = Math.max(0, MIN_LOADING_TIME - (Date.now() - s.startedAt))
   const timer = setTimeout(() => {
-    if (session === s) hubWindow?.hide()
+    if (session === s) getHub()?.hide()
   }, wait)
   s.timers.push(timer)
 }
@@ -391,7 +383,7 @@ function startWindowSearch(s: Session): void {
           // On cache quand même le hub : le jeu est peut-être là, mais pas reconnu
           if (s.phase !== 'playing') {
             s.phase = 'playing'
-            hubWindow?.hide()
+            getHub()?.hide()
             sendState(s)
           }
         }
@@ -460,9 +452,10 @@ function endSession(message?: string): void {
     session.timers.forEach((t) => clearInterval(t))
     session = null
   }
-  if (hubWindow && !hubWindow.isDestroyed()) {
-    hubWindow.show()
-    hubWindow.focus()
+  const hub = getHub()
+  if (hub) {
+    hub.show()
+    hub.focus()
   }
   notify({ running: false, gameId: null, message })
 }

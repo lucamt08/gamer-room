@@ -25,7 +25,11 @@ et guide pas à pas pour tout ce qui touche à Git/GitHub.
 
 ```
 src/main/        Processus principal (Node). Un fichier = une responsabilité.
-  index.ts         Création de la fenêtre, branchement des modules
+  index.ts         Démarrage de l'appli, branchement des modules
+  hub.ts           Fenêtre du hub (peut être fermée puis recréée : toujours passer par getHub())
+  background.ts    Option « compter en dehors de l'appli » : icône près de l'horloge + démarrage avec Windows
+  playtimeTracker.ts Compteur de temps de jeu (regarde les programmes ouverts toutes les 10 s)
+  steamPlaytime.ts Lit le temps de jeu enregistré par Steam (userdata\<compte>\config\localconfig.vdf)
   windowManager.ts TOUT le code Win32 (processus, fenêtres, borderless). N'importe pas Electron.
   gameLauncher.ts  Lancement, recherche de fenêtre (30 s), suivi du processus, kill
   library.ts       CRUD des jeux (library.json), résolution des .lnk
