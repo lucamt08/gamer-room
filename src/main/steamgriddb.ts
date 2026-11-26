@@ -9,7 +9,15 @@ import type { AutoCoverResult, Game, SgdbGame, SgdbGrid, SgdbSearchResult } from
 import { getSettings } from './settings'
 import { downloadCover, coverPath } from './covers'
 import { getGame, guessName, updateGame } from './library'
-import { fallbackNames, isGenericName, isSameName, nameVariants, normalizeName, rankBySimilarity } from './gameNames'
+import {
+  fallbackNames,
+  isGenericName,
+  isSameName,
+  nameVariants,
+  normalizeName,
+  pickBest,
+  rankBySimilarity
+} from './gameNames'
 import { readExeInfo } from './exeInfo'
 import { detectLaunchKind } from './launcherDetect'
 import { rmSync } from 'node:fs'
@@ -118,8 +126,10 @@ export function nameComesFromLauncher(game: Game, info = readExeInfo(game.exePat
 async function findMatch(name: string): Promise<{ match: SgdbGame | null; results: SgdbGame[] }> {
   const { results, correctedTerm } = await smartSearch(name)
   const exact = results.filter((r) => isSameName(r.name, name))
-  // Un seul résultat ne suffit que si le nom n'a pas été corrigé (sinon on laisse l'utilisateur vérifier)
-  const match = exact.length === 1 ? exact[0] : !correctedTerm && results.length === 1 ? results[0] : null
+  // 1. un seul jeu au nom identique ; 2. un seul résultat pour le nom exact ;
+  // 3. sinon, le plus ressemblant si c'est clair (voir pickBest dans gameNames.ts)
+  const match =
+    exact.length === 1 ? exact[0] : !correctedTerm && results.length === 1 ? results[0] : pickBest(name, results)
   return { match, results }
 }
 

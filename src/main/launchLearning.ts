@@ -6,7 +6,7 @@
 // on cherche son vrai nom et sa jaquette (voir autoCover dans steamgriddb.ts).
 
 import type { Game } from '@shared/types'
-import { getGame, updateGame } from './library'
+import { getGame, getGames, updateGame } from './library'
 import { readExeInfo } from './exeInfo'
 import { removeRunAsAdmin } from './compatFlags'
 import { autoCover, nameComesFromLauncher } from './steamgriddb'
@@ -22,6 +22,21 @@ export async function fixNameIfFromLauncher(gameId: string): Promise<Game | null
   if (!game || !nameComesFromLauncher(game)) return null
   const result = await autoCover(gameId)
   return result.status === 'applied' ? result.game : null
+}
+
+/**
+ * Au démarrage du hub : corrige les jeux qui portent encore le nom de leur launcher
+ * (ex. "Longshot" → "The Legend of Zelda: Ocarina of Time"). `onUpdated` prévient l'interface.
+ */
+export async function fixLauncherNamesAtStartup(onUpdated: (game: Game) => void): Promise<void> {
+  for (const game of getGames()) {
+    try {
+      const updated = await fixNameIfFromLauncher(game.id)
+      if (updated) onUpdated(updated)
+    } catch (error) {
+      console.warn(`[launcher] Correction du nom de "${game.name}" impossible`, error)
+    }
+  }
 }
 
 /**

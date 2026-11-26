@@ -29,6 +29,7 @@ import type { Game, RunningState } from '@shared/types'
 import { shouldSkipLauncher } from '@shared/launch'
 import * as wm from './windowManager'
 import { ensureLaunchInfo, updateGame } from './library'
+import { removeRunAsAdmin } from './compatFlags'
 import { fixNameIfFromLauncher, learnFromGameWindow, samePath } from './launchLearning'
 
 // Réglages du suivi (en millisecondes)
@@ -120,7 +121,6 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
     }
 
     // Jeux ajoutés avant la détection des launchers : on la fait maintenant
-    const isNewInfo = !gameToLaunch.launchKind
     const game = ensureLaunchInfo(gameToLaunch)
 
     // 1. Fenêtres déjà présentes
@@ -128,6 +128,11 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
 
     // 2. Démarrage du jeu : directement le vrai .exe si on saute le launcher (Cyberpunk), sinon le .exe ajouté
     const skip = shouldSkipLauncher(game) && existsSync(game.realExePath!)
+    // L'option « Exécuter en tant qu'administrateur » peut avoir été remise (par un launcher, un outil…) :
+    // on la retire juste avant de lancer, sinon Windows refuse le lancement direct.
+    if (skip && removeRunAsAdmin(game.realExePath)) {
+      console.log('[launcher] Option administrateur retrouvée sur le jeu et retirée avant le lancement')
+    }
     const child = skip ? startProcess(game.realExePath!, '', dirname(game.realExePath!)) : startProcess(game.exePath, game.args, game.workingDir)
 
     child.once('error', (error) => {
@@ -169,15 +174,13 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
       // 3. Le hub reste affiché : l'interface montre l'écran de chargement
       sendState(s, { game })
 
-      // Un ancien jeu qui porte le nom de son launcher ("Longshot") : on cherche son vrai nom tout de suite
-      if (isNewInfo) {
-        fixNameIfFromLauncher(game.id).then((updated) => {
-          if (updated && session === s) {
-            s.game = updated
-            sendState(s, { game: updated })
-          }
-        })
-      }
+      // Le jeu porte encore le nom de son launcher ("Longshot") : on cherche son vrai nom tout de suite
+      fixNameIfFromLauncher(game.id).then((updated) => {
+        if (updated && session === s) {
+          s.game = updated
+          sendState(s, { game: updated })
+        }
+      })
 
       // 4. Recherche des fenêtres (launcher puis jeu)
       startWindowSearch(s)

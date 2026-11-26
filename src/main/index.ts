@@ -10,6 +10,7 @@ import { initGameLauncher } from './gameLauncher'
 import { getSettings } from './settings'
 import { registerKillShortcut } from './shortcuts'
 import { initUpdater } from './updater'
+import { fixLauncherNamesAtStartup } from './launchLearning'
 
 // Une seule instance du hub à la fois : si on le relance, on remet l'existant au premier plan.
 if (!app.requestSingleInstanceLock()) {
@@ -80,6 +81,11 @@ app.whenReady().then(() => {
   registerIpcHandlers(hub)
   initGameLauncher(hub, (state) => send(IPC.runningState, state))
   initUpdater((status) => send(IPC.updateStatus, status))
+
+  // Jeux qui portent encore le nom de leur launcher : on cherche leur vrai nom une fois l'interface prête
+  hub.webContents.once('did-finish-load', () => {
+    fixLauncherNamesAtStartup((game) => send(IPC.gameUpdated, game))
+  })
 
   if (!registerKillShortcut(getSettings().killShortcut)) {
     console.warn(`[main] Raccourci "${getSettings().killShortcut}" indisponible`)

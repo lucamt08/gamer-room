@@ -294,6 +294,38 @@ export function fallbackNames(exePath: string, info: { productName: string | nul
   return names
 }
 
+/**
+ * Choisit tout seul le bon jeu parmi plusieurs résultats, quand c'est raisonnable :
+ *  1. parmi les jeux dont le nom contient TOUS les mots cherchés, celui qui a le moins de mots en plus
+ *     ("zelda ocarina of time" → "The Legend of Zelda: Ocarina of Time" plutôt que "… Ocarina of Time 3D") ;
+ *     à égalité, le premier proposé par SteamGridDB (le plus pertinent) ;
+ *  2. sinon, le plus ressemblant, s'il ressemble assez (au moins 60 %).
+ * Renvoie null si aucun jeu ne ressemble vraiment (l'interface demandera alors à l'utilisateur).
+ */
+export function pickBest<T extends { name: string }>(typed: string, games: T[]): T | null {
+  const meaningful = (words: string[]): string[] => removeEditionWordsFromList(words).filter((w) => !STOP_WORDS.includes(w))
+  const typedWords = meaningful(simplify(typed))
+  if (typedWords.length === 0 || games.length === 0) return null
+  const matches = (a: string, b: string): boolean => wordSimilarity(a, b) >= 0.75
+
+  const scored = games.map((game, index) => {
+    const words = meaningful(simplify(game.name))
+    return {
+      game,
+      index,
+      covered: typedWords.every((t) => words.some((w) => matches(t, w))),
+      extras: words.filter((w) => !typedWords.some((t) => matches(t, w))).length,
+      score: nameSimilarity(typed, game.name)
+    }
+  })
+
+  const covering = scored.filter((s) => s.covered).sort((a, b) => a.extras - b.extras || a.index - b.index)
+  if (covering.length > 0) return covering[0].game
+
+  const ranked = [...scored].sort((a, b) => b.score - a.score || a.index - b.index)
+  return ranked[0].score >= 0.6 ? ranked[0].game : null
+}
+
 /** Trie des jeux trouvés du plus ressemblant au moins ressemblant à ce qui a été tapé. */
 export function rankBySimilarity<T extends { name: string }>(typed: string, games: T[]): T[] {
   return games

@@ -50,7 +50,9 @@ export default function App() {
   // --- Chargement initial + écoute de l'état "jeu en cours" ---
   useEffect(() => {
     window.api.getGames().then(setGames)
-    return window.api.onRunningState((state) => {
+    // Un jeu corrigé en arrière-plan au démarrage (ex. "Longshot" → son vrai nom et sa jaquette)
+    const stopGameUpdates = window.api.onGameUpdated(replaceGame)
+    const stopRunning = window.api.onRunningState((state) => {
       setRunning(state)
       if (state.message) showToast(state.message)
       // Le lancement a appris quelque chose (vrai nom, jaquette…) : on met le jeu à jour
@@ -58,6 +60,10 @@ export default function App() {
       // Quand un jeu se ferme, on recharge la liste pour avoir la date de dernier lancement à jour
       if (!state.running) window.api.getGames().then(setGames)
     })
+    return () => {
+      stopGameUpdates()
+      stopRunning()
+    }
   }, [])
 
   // Le toast disparaît tout seul après 4 s
