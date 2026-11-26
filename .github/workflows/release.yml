@@ -33,8 +33,32 @@ jobs:
       - name: Vérifier les types TypeScript
         run: npm run typecheck
 
-      - name: Construire et publier l'installateur
-        run: npm run release
+      # Sécurité : le tag (ex. v0.2.0) doit correspondre à la version de package.json,
+      # sinon la mise à jour automatique serait incohérente.
+      - name: Vérifier que le tag correspond à la version
+        shell: bash
+        run: |
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "${{ github.ref_name }}" ]; then
+            echo "::error::Le tag ${{ github.ref_name }} ne correspond pas à la version de package.json ($VERSION)"
+            exit 1
+          fi
+
+      # electron-builder construit l'installateur dans release/ (sans rien publier)
+      - name: Construire l'installateur
+        run: npm run dist
+
+      # gh crée la Release et y dépose les 3 fichiers en une seule fois :
+      #  - l'installateur .exe
+      #  - le .blockmap (permet de ne télécharger que les différences lors des mises à jour)
+      #  - latest.yml (lu par l'appli installée pour savoir s'il existe une nouvelle version)
+      - name: Publier la Release GitHub
+        shell: bash
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            release/gamer-room-setup-*.exe release/gamer-room-setup-*.exe.blockmap release/latest.yml \
+            --title "Gamer Room ${{ github.ref_name }}" \
+            --generate-notes
         env:
           # Jeton fourni automatiquement par GitHub (aucune clé à configurer)
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

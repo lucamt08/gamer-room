@@ -62,10 +62,14 @@ Pour ajouter une fonction appelable depuis l'interface : canal dans `shared/ipc.
 | `npm run typecheck` | Vérification TypeScript — à lancer avant chaque commit |
 | `npm run build` | Compile dans `out/` |
 | `npm run dist` | Crée l'installateur local dans `release/` (sans publier) |
-| `npm run release` | Utilisé par la GitHub Action uniquement (publie la Release) |
+
+La publication est faite par `.github/workflows/release.yml` : `npm run dist`, puis `gh release create`
+avec l'installateur, le `.blockmap` et `latest.yml`. Ne pas utiliser `electron-builder --publish always`
+(course entre les envois qui perd l'installateur quand la Release n'existe pas encore).
 
 Publier une version : `npm version X.Y.Z` puis `git push --follow-tags` (voir README). La GitHub Action
-construit l'installateur et publie la Release ; les applis installées proposent la mise à jour.
+vérifie que le tag = la version de package.json, construit l'installateur et publie la Release ;
+les applis installées proposent la mise à jour.
 
 ## Règles (IMPORTANT)
 
