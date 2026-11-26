@@ -23,6 +23,11 @@ export interface Game {
   addedAt: string
   /** Dernière fois que le jeu a été lancé (format ISO), ou null. */
   lastPlayedAt: string | null
+  /**
+   * Éditeur lu dans le .exe (ex. "Sony Interactive Entertainment"), ou null si inconnu.
+   * Absent pour les jeux ajoutés avant cette version (rempli à la prochaine recherche de jaquette).
+   */
+  publisher?: string | null
 }
 
 /** Les champs qu'on peut modifier depuis l'écran "Modifier". */
@@ -44,6 +49,17 @@ export interface SgdbGame {
   name: string
   /** Année de sortie si connue. */
   year: number | null
+}
+
+/** Résultat d'une recherche SteamGridDB, avec correction automatique du nom si besoin. */
+export interface SgdbSearchResult {
+  /** Jeux trouvés (du plus ressemblant au moins ressemblant quand le nom a été corrigé). */
+  results: SgdbGame[]
+  /**
+   * Orthographe qui a permis de trouver des résultats quand le nom tapé ne donnait rien
+   * (ex. "Horizon Forbidden West" pour "HorizonForbiddenWest_x64"), sinon null.
+   */
+  correctedTerm: string | null
 }
 
 /** Une jaquette (grid) SteamGridDB. */

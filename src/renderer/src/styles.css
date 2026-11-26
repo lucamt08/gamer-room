@@ -825,6 +825,33 @@ input[type='checkbox'] {
   flex: 1;
 }
 
+/* Encadré "Tu voulais dire : …" quand le nom tapé ne donnait aucun résultat */
+.name-suggestion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: rgba(79, 140, 255, 0.08);
+}
+
+.name-suggestion p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Case à cocher "Renommer aussi le jeu en …" */
+.rename-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
 .result-list {
   display: flex;
   flex-direction: column;
