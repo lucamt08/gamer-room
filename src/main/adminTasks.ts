@@ -51,11 +51,20 @@ export async function getTaskCommand(name: string): Promise<string | null> {
   }
 }
 
+/** Un fichier ou dossier protégé (ex. dans Program Files) que l'utilisateur doit pouvoir modifier. */
+export interface WritablePath {
+  path: string
+  /** true = dossier : le droit s'applique aussi à tout ce qu'il contient (et contiendra). */
+  folder: boolean
+}
+
 /**
  * Crée (ou remplace) des tâches administrateur. Windows affiche UNE fenêtre d'autorisation pour toutes.
+ * `writable` : fichiers/dossiers protégés que l'utilisateur pourra ensuite modifier (droit « Modifier »),
+ * profitant de la même fenêtre d'autorisation.
  * Renvoie false si l'utilisateur a refusé (ou si la création a échoué).
  */
-export async function createAdminTasks(tasks: AdminTask[]): Promise<boolean> {
+export async function createAdminTasks(tasks: AdminTask[], writable: WritablePath[] = []): Promise<boolean> {
   // La tâche doit tourner dans la session de l'utilisateur actuel (pour que la fenêtre s'affiche),
   // même si c'est un autre compte qui donne l'autorisation administrateur.
   const user = `${process.env['USERDOMAIN'] ?? '.'}\\${userInfo().username}`
@@ -75,6 +84,12 @@ export async function createAdminTasks(tasks: AdminTask[]): Promise<boolean> {
       `Register-ScheduledTask -TaskName ${psQuote(task.name)} -TaskPath ${psQuote(TASK_FOLDER)} ` +
         `-Action (${action.join(' ')}) -Principal $principal -Settings $settings -Force | Out-Null`
     )
+  }
+  // Droit « Modifier » pour l'utilisateur (icacls). (OI)(CI) = hérité par les fichiers et sous-dossiers.
+  for (const item of writable) {
+    const right = item.folder ? '(OI)(CI)M' : 'M'
+    lines.push(`icacls ${psQuote(item.path)} /grant ${psQuote(`${user}:${right}`)} | Out-Null`)
+    lines.push('if ($LASTEXITCODE -ne 0) { exit 1 }')
   }
   // Le script est passé en Base64 (UTF-16) : aucun problème de guillemets ou d'accents
   const encoded = Buffer.from(lines.join('\n'), 'utf16le').toString('base64')
