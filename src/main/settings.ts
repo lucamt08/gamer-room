@@ -3,6 +3,7 @@
 //    Elle n'est jamais écrite dans le dossier du projet, donc jamais commitée.
 
 import type { Settings } from '@shared/types'
+import { DEFAULT_SCROLL_SETTINGS } from '@shared/scroll'
 import { readJson, writeJson } from './jsonStore'
 
 const FILE = 'settings.json'
@@ -10,7 +11,8 @@ const FILE = 'settings.json'
 export const DEFAULT_SETTINGS: Settings = {
   steamGridDbApiKey: '',
   killShortcut: 'Ctrl+Alt+F4',
-  startFullscreen: false
+  startFullscreen: false,
+  ...DEFAULT_SCROLL_SETTINGS // molette, glisser, manette (voir shared/scroll.ts)
 }
 
 let cache: Settings | null = null

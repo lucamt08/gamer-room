@@ -13,6 +13,16 @@ export function handleModalNav(root: HTMLElement | null, action: NavAction): boo
   if (items.length === 0) return false
   const index = items.indexOf(document.activeElement as HTMLElement)
 
+  // Sur une jauge (curseur), gauche/droite changent sa valeur au lieu de changer d'élément
+  const focused = document.activeElement
+  if (focused instanceof HTMLInputElement && focused.type === 'range' && (action === 'left' || action === 'right')) {
+    if (action === 'left') focused.stepDown()
+    else focused.stepUp()
+    // On prévient React que la valeur a changé (sinon l'affichage ne suit pas)
+    focused.dispatchEvent(new Event('input', { bubbles: true }))
+    return true
+  }
+
   switch (action) {
     case 'up':
     case 'left':
