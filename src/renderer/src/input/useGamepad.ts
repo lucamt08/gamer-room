@@ -30,7 +30,23 @@ const BUTTONS: Record<number, NavAction> = {
 const DIRECTIONS: NavAction[] = ['up', 'down', 'left', 'right']
 const STICK_DEADZONE = 0.5 // le stick doit être poussé à plus de 50 %
 const REPEAT_DELAY = 350 // ms avant que la direction se répète quand on la maintient
-const REPEAT_RATE = 120 // ms entre deux répétitions
+/** Accélération : à chaque répétition, le délai est multiplié par ce nombre (plus petit = accélère plus vite). */
+const ACCELERATION_FACTOR = 0.85
+/** Accélération : délai minimum entre deux répétitions (ms). */
+const MIN_REPEAT_RATE = 25
+
+/** Réglages venant des Paramètres (onglet Manette). */
+export interface GamepadOptions {
+  /** Vitesse de 1 (lent) à 9 (rapide), 5 = moyen. */
+  speed: number
+  /** Accélérer quand on maintient la direction ? */
+  acceleration: boolean
+}
+
+/** Délai (ms) entre deux répétitions selon la vitesse : 1 = 200 ms, 5 = 120 ms (moyen, d'origine), 9 = 40 ms. */
+function repeatRateFor(speed: number): number {
+  return 200 - (Math.min(9, Math.max(1, speed)) - 1) * 20
+}
 
 /** Direction actuellement indiquée par le stick gauche, ou null. */
 function stickDirection(pad: Gamepad): NavAction | null {
@@ -40,9 +56,16 @@ function stickDirection(pad: Gamepad): NavAction | null {
   return y > 0 ? 'down' : 'up'
 }
 
-export function useGamepad(onAction: (action: NavAction) => void, enabled: boolean): void {
+export function useGamepad(
+  onAction: (action: NavAction) => void,
+  enabled: boolean,
+  options: GamepadOptions
+): void {
   const handler = useRef(onAction)
   handler.current = onAction
+  // Les réglages sont relus à chaque image : pas besoin de relancer la boucle quand ils changent
+  const settings = useRef(options)
+  settings.current = options
 
   useEffect(() => {
     if (!enabled) return
@@ -50,6 +73,8 @@ export function useGamepad(onAction: (action: NavAction) => void, enabled: boole
     // Actions "enfoncées" à l'image précédente, et moment du prochain déclenchement pour les directions
     let previous = new Set<NavAction>()
     const nextRepeat = new Map<NavAction, number>()
+    // Délai actuel entre deux répétitions, par direction (il diminue avec l'accélération)
+    const currentRate = new Map<NavAction, number>()
 
     const loop = (): void => {
       frame = requestAnimationFrame(loop)
@@ -75,11 +100,19 @@ export function useGamepad(onAction: (action: NavAction) => void, enabled: boole
         if (!previous.has(action)) {
           // Nouvel appui
           handler.current(action)
-          if (DIRECTIONS.includes(action)) nextRepeat.set(action, now + REPEAT_DELAY)
+          if (DIRECTIONS.includes(action)) {
+            nextRepeat.set(action, now + REPEAT_DELAY)
+            currentRate.set(action, repeatRateFor(settings.current.speed))
+          }
         } else if (DIRECTIONS.includes(action) && now >= (nextRepeat.get(action) ?? Infinity)) {
           // Direction maintenue : répétition
           handler.current(action)
-          nextRepeat.set(action, now + REPEAT_RATE)
+          let rate = currentRate.get(action) ?? repeatRateFor(settings.current.speed)
+          if (settings.current.acceleration) {
+            rate = Math.max(MIN_REPEAT_RATE, rate * ACCELERATION_FACTOR) // de plus en plus vite
+            currentRate.set(action, rate)
+          }
+          nextRepeat.set(action, now + rate)
         }
       }
       previous = pressed

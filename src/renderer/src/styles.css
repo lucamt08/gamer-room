@@ -15,7 +15,7 @@
   --accent-2: #7b5cff;
   --danger: #ff5470;
   --success: #3ddc97;
-  --box-width: clamp(120px, 19vh, 210px); /* largeur d'une boîte (s'adapte à la hauteur de la fenêtre) */
+  --box-width: clamp(130px, 27vh, 380px); /* largeur d'une boîte : grande, elle s'adapte à la hauteur de la fenêtre */
   --box-height: calc(var(--box-width) * 1.5); /* format jaquette 600x900 */
   --box-depth: calc(var(--box-width) * 0.14); /* épaisseur du boîtier */
   --focus-scale: 1.32; /* agrandissement de la boîte du centre */
@@ -71,7 +71,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 18px 32px;
+  padding: 14px 32px;
 }
 
 .logo {
@@ -173,13 +173,19 @@ kbd {
 /* La scène : la zone des boîtes (en haut) + la zone du reflet (en bas) */
 .cf-stage {
   --stage-height: calc(var(--box-height) * var(--focus-scale) + 24px);
-  --reflect-height: calc(var(--box-height) * 0.5);
+  --reflect-height: calc(var(--box-height) * 0.4);
   position: relative;
   width: 100%;
   height: calc(var(--stage-height) + var(--reflect-height));
   /* Les boîtes s'effacent doucement vers les bords de l'écran */
   -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+
+/* Pendant qu'on fait glisser les jaquettes à la souris (voir input/useDragScroll.ts) */
+.cf-stage.dragging,
+.cf-stage.dragging .box-wrap {
+  cursor: grabbing;
 }
 
 /* Halo de lumière bleutée derrière le jeu du centre */
@@ -192,6 +198,14 @@ kbd {
   transform: translateX(-50%);
   background: radial-gradient(ellipse at 50% 45%, rgba(70, 130, 255, 0.22), transparent 62%);
   pointer-events: none;
+  /* Petit flash de lumière à chaque cran (le halo est recréé à chaque changement de jeu, voir Shelf.tsx) */
+  animation: light-pulse 0.5s ease-out;
+}
+
+@keyframes light-pulse {
+  from {
+    filter: brightness(1.8);
+  }
 }
 
 /* La rangée de boîtes, reflétée sous elle-même pour faire un sol brillant */
@@ -236,7 +250,8 @@ kbd {
     translateX(calc(var(--side) * (var(--box-width) * 1.3 + (var(--dist) - 1) * var(--box-width) * 0.34)))
     translateZ(calc(min(var(--dist), 1) * -170px - var(--dist) * 4px))
     rotateY(calc(var(--side) * -40deg));
-  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Léger rebond en fin de mouvement (le 1.18 dépasse un peu puis revient) : donne la sensation de "cran" */
+  transition: transform 0.55s cubic-bezier(0.3, 1.18, 0.5, 1);
 }
 
 .cf-item.selected {
@@ -296,12 +311,33 @@ kbd {
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* La boîte qui arrive au centre fait un petit "pop" (le cran), puis se met à flotter */
 .cf-item.selected .box-float {
-  animation: box-float 5s ease-in-out infinite;
+  animation:
+    box-snap 0.4s cubic-bezier(0.3, 1.6, 0.5, 1),
+    box-float 5s ease-in-out 0.4s infinite;
+}
+
+@keyframes box-snap {
+  from {
+    transform: scale(0.93);
+  }
+  to {
+    transform: scale(1);
+  }
 }
 
 .cf-item:not(.selected) .box-wrap:hover .box-float {
   transform: translateY(-12px);
+}
+
+/* Pendant un défilement (molette, glisser, clavier), pas d'effet de survol (voir Shelf.tsx) */
+.cf-stage.scrolling .cf-item:not(.selected) .box-wrap:hover .box-float {
+  transform: none;
+}
+
+.cf-stage.scrolling .cf-item:not(.selected) .box-wrap:hover .box-shade {
+  opacity: min(calc(var(--dist) * 0.035 + 0.12), 0.6); /* l'ombre normale, sans éclaircir */
 }
 
 @keyframes box-float {
@@ -616,9 +652,9 @@ kbd {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 0 28px 22px;
-  margin-top: calc(var(--box-height) * -0.3);
+  gap: 8px;
+  padding: 0 28px 16px;
+  margin-top: calc(var(--box-height) * -0.25);
   text-align: center;
 }
 
@@ -636,7 +672,68 @@ kbd {
 
 .details-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+/* Gros bouton « Jouer » : pilule blanche avec un rond bleu, qui brille au survol */
+.play-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 6px;
+  padding: 9px 26px 9px 10px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s;
+}
+
+.play-btn:hover,
+.play-btn:focus-visible {
+  outline: none;
+  transform: translateY(-2px) scale(1.04);
+  box-shadow:
+    0 0 0 3px rgba(150, 190, 255, 0.45),
+    0 0 34px rgba(255, 255, 255, 0.5);
+}
+
+.play-btn:active {
+  transform: scale(0.96);
+}
+
+.play-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+/* Le rond bleu qui contient le triangle */
+.play-btn-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-size: 12px;
+  padding-left: 2px; /* le triangle paraît mieux centré */
+  transition: transform 0.2s;
+}
+
+.play-btn:hover .play-btn-icon {
+  transform: scale(1.1);
 }
 
 .details-help {
@@ -813,6 +910,112 @@ input[type='checkbox'] {
 .success {
   color: var(--success);
   margin: 0;
+}
+
+/* ---------- Onglets (écran Paramètres) ---------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+}
+
+.tab {
+  flex: 1;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.tab:hover,
+.tab:focus-visible {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.tab-active,
+.tab-active:hover {
+  background: #fff;
+  color: #000;
+  font-weight: 600;
+}
+
+/* Petit titre de section dans un onglet ("Molette", "Glisser à la souris") */
+.form-section {
+  margin: 6px 0 -6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ---------- Jauges (curseurs des Paramètres) ---------- */
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.slider-value {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-disabled {
+  opacity: 0.45;
+}
+
+input[type='range'] {
+  flex: 1;
+  height: 6px;
+  appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  cursor: pointer;
+}
+
+input[type='range']:disabled {
+  cursor: default;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s;
+}
+
+input[type='range']:hover::-webkit-slider-thumb,
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+input[type='range']:focus-visible {
+  outline: 2px solid rgba(150, 190, 255, 0.6);
+  outline-offset: 4px;
 }
 
 .search-row {

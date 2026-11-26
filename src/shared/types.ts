@@ -73,6 +73,28 @@ export interface Settings {
   killShortcut: string
   /** Démarrer le hub en plein écran (façon Big Picture) ? */
   startFullscreen: boolean
+
+  // --- Clavier / souris ---
+  /** Molette : niveau de vitesse, de 1 (très lent) à 5 (très rapide) ; 3 = moyen (vitesse d'origine). */
+  wheelLevel: number
+  /** Molette : accélérer quand on tourne vite ? */
+  wheelAcceleration: boolean
+  /** Souris : glisser horizontalement (clic maintenu) fait défiler les jaquettes ? */
+  dragScroll: boolean
+  /** Souris : sensibilité du glisser (1 = lent, 5 = rapide). */
+  dragSensitivity: number
+
+  // --- Son ---
+  /** Jouer un petit "clic" à chaque jaquette quand on fait défiler ? */
+  scrollSound: boolean
+  /** Volume de ce clic, de 1 (très doux) à 10 (fort). */
+  scrollSoundVolume: number
+
+  // --- Manette ---
+  /** Manette : vitesse quand on maintient une direction, de 1 (lent) à 9 (rapide) ; 5 = moyen (vitesse d'origine). */
+  gamepadSpeed: number
+  /** Manette : accélérer quand on maintient la direction longtemps ? */
+  gamepadAcceleration: boolean
 }
 
 /** Un résultat de recherche SteamGridDB (un jeu). */

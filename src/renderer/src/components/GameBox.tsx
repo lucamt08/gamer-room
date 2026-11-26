@@ -5,6 +5,8 @@
 //    0 = au centre, de face ; négatif = à gauche ; positif = à droite,
 //  - la boîte du centre pivote en 3D pour "regarder" la souris, avec un reflet
 //    lumineux qui suit le curseur et un éclat de brillance qui balaie la jaquette.
+// Un clic sur une boîte la sélectionne seulement : on lance le jeu avec le bouton « Jouer »
+// sous le carrousel (plus de double-clic : ça provoquait trop de lancements par erreur).
 // Les styles sont dans styles.css (section "Carrousel" et "Boîte de jeu").
 
 import { useRef, type CSSProperties, type PointerEvent } from 'react'
@@ -15,7 +17,6 @@ interface Props {
   /** Écart avec le jeu sélectionné : 0 = au centre, -1 = juste à gauche, 1 = juste à droite... */
   offset: number
   onSelect: () => void
-  onLaunch: () => void
 }
 
 /** Inclinaison maximale (en degrés) quand la souris est au bord de la boîte. */
@@ -49,7 +50,7 @@ function isNewGame(addedAt: string): boolean {
  * pour que l'animation reste fluide.
  */
 function useMouseTilt(enabled: boolean) {
-  const ref = useRef<HTMLButtonElement>(null)
+  const ref = useRef<HTMLDivElement>(null)
   const frame = useRef(0)
 
   function reset() {
@@ -63,7 +64,7 @@ function useMouseTilt(enabled: boolean) {
     element.classList.remove('tilting')
   }
 
-  function onPointerMove(event: PointerEvent<HTMLButtonElement>) {
+  function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const element = ref.current
     if (!element || !enabled) return
     const rect = element.getBoundingClientRect()
@@ -87,7 +88,7 @@ function useMouseTilt(enabled: boolean) {
   return { ref, onPointerMove, onPointerLeave: reset }
 }
 
-export default function GameBox({ game, offset, onSelect, onLaunch }: Props) {
+export default function GameBox({ game, offset, onSelect }: Props) {
   const selected = offset === 0
   const distance = Math.abs(offset)
   const hue = colorFromName(game.name)
@@ -105,16 +106,14 @@ export default function GameBox({ game, offset, onSelect, onLaunch }: Props) {
 
   return (
     <div className={`cf-item${selected ? ' selected' : ''}`} style={style}>
-      <button
+      {/* Toute la boîte est cliquable : un clic la sélectionne */}
+      <div
         ref={tilt.ref}
         className="box-wrap"
         onPointerMove={tilt.onPointerMove}
         onPointerLeave={tilt.onPointerLeave}
-        onFocus={onSelect}
         onClick={onSelect}
-        onDoubleClick={onLaunch}
-        title={`${game.name} — double-clic pour jouer`}
-        tabIndex={-1}
+        title={selected ? game.name : `${game.name} — clic pour sélectionner`}
       >
         {/* Enveloppe qui fait flotter doucement la boîte du centre */}
         <div className="box-float">
@@ -151,7 +150,7 @@ export default function GameBox({ game, offset, onSelect, onLaunch }: Props) {
             </div>
           </div>
         </div>
-      </button>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 // Composant principal : l'étagère + les fenêtres modales + la navigation.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Game, RunningState, SgdbGame } from '@shared/types'
+import { DEFAULT_SCROLL_SETTINGS, type ScrollSettings } from '@shared/scroll'
 import Shelf from './components/Shelf'
 import GameEditor from './components/GameEditor'
 import CoverPicker from './components/CoverPicker'
@@ -13,6 +14,7 @@ import { useKeyboard } from './input/useKeyboard'
 import { useGamepad } from './input/useGamepad'
 import { handleModalNav } from './input/focusNav'
 import { cleanError, countColumns } from './utils'
+import { playTick } from './sound'
 
 /**
  * Transforme la date du dernier lancement en texte lisible :
@@ -43,6 +45,8 @@ export default function App() {
   const [running, setRunning] = useState<RunningState>({ running: false, gameId: null })
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null)
   const [dragging, setDragging] = useState(false)
+  // Réglages de défilement (molette, glisser, manette), mis à jour quand on enregistre les Paramètres
+  const [scroll, setScroll] = useState<ScrollSettings>(DEFAULT_SCROLL_SETTINGS)
 
   const shelfRef = useRef<HTMLDivElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -50,6 +54,7 @@ export default function App() {
   // --- Chargement initial + écoute de l'état "jeu en cours" ---
   useEffect(() => {
     window.api.getGames().then(setGames)
+    window.api.getSettings().then(setScroll)
     // Un jeu corrigé en arrière-plan au démarrage (ex. "Longshot" → son vrai nom et sa jaquette)
     const stopGameUpdates = window.api.onGameUpdated(replaceGame)
     const stopRunning = window.api.onRunningState((state) => {
@@ -196,7 +201,7 @@ export default function App() {
 
   const inputEnabled = !running.running
   useKeyboard(onAction, inputEnabled)
-  useGamepad(onAction, inputEnabled)
+  useGamepad(onAction, inputEnabled, { speed: scroll.gamepadSpeed, acceleration: scroll.gamepadAcceleration })
 
   // F11 = plein écran du hub (fonctionne même quand une modale est ouverte)
   useEffect(() => {
@@ -209,6 +214,21 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Petit "clic" à chaque jaquette passée (molette, glisser, clavier, manette, clic)
+  const previousSelected = useRef(selected)
+  useEffect(() => {
+    const passed = Math.abs(selected - previousSelected.current)
+    previousSelected.current = selected
+    if (passed === 0 || !scroll.scrollSound) return
+    const volume = scroll.scrollSoundVolume / 10
+    // Plusieurs jaquettes d'un coup : un clic pour chacune, en rafale (4 au maximum)
+    const timers: number[] = []
+    for (let i = 0; i < Math.min(passed, 4); i++) {
+      timers.push(window.setTimeout(() => playTick(volume), i * 35))
+    }
+    return () => timers.forEach((t) => clearTimeout(t))
+  }, [selected, scroll.scrollSound, scroll.scrollSoundVolume])
 
   // Si la liste rétrécit (suppression), on garde une sélection valide
   useEffect(() => {
@@ -265,7 +285,7 @@ export default function App() {
           games={games}
           selectedIndex={selected}
           onSelect={setSelected}
-          onLaunch={(i) => launch(games[i])}
+          scroll={scroll}
         />
       </main>
 
@@ -276,8 +296,12 @@ export default function App() {
             <div className="hint">{formatLastPlayed(selectedGame.lastPlayedAt)}</div>
           </div>
           <div className="details-actions">
-            <button className="btn btn-primary" onClick={() => launch(selectedGame)} disabled={running.running}>
-              ▶ Jouer
+            {/* Gros bouton « Jouer » (le seul moyen de lancer à la souris : plus de double-clic) */}
+            <button className="play-btn" onClick={() => launch(selectedGame)} disabled={running.running}>
+              <span className="play-btn-icon" aria-hidden="true">
+                ▶
+              </span>
+              Jouer
             </button>
             <button className="btn" onClick={() => setModal({ kind: 'edit', gameId: selectedGame.id })}>
               Modifier
@@ -344,7 +368,7 @@ export default function App() {
           }}
         />
       )}
-      {modal?.kind === 'settings' && <SettingsPanel ref={modalRef} onClose={() => setModal(null)} onSaved={() => {}} />}
+      {modal?.kind === 'settings' && <SettingsPanel ref={modalRef} onClose={() => setModal(null)} onSaved={setScroll} />}
       {modal?.kind === 'steam' && <SteamImport ref={modalRef} onClose={() => setModal(null)} onAdded={onSteamAdded} />}
     </div>
   )
