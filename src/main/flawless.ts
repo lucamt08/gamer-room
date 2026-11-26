@@ -11,14 +11,15 @@
 //
 // Ce que fait Gamer Room au clic sur « Jouer » (si le jeu a un correctif) :
 //  1. si FWS est déjà ouvert, on le ferme (il doit redémarrer pour lire la case cochée) ;
-//  2. on coche « Fix Enabled » dans le fichier du correctif et on ouvre son onglet au démarrage ;
+//  2. on coche « Fix Enabled » dans le fichier du correctif et on ouvre son onglet au démarrage
+//     (FWS est souvent dans Program Files : l'autorisation unique donne aussi le droit de modifier ses réglages) ;
 //  3. on lance FWS (en administrateur, sans fenêtre d'autorisation grâce à adminTasks.ts) ;
 //  4. on attend qu'il soit prêt, puis gameLauncher.ts lance le jeu. FWS reste ouvert après le jeu.
 //
 // Rien n'est propre à un jeu : tout est lu dans les fichiers de FWS, donc ça marche sur n'importe quel PC.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import type { FwsGameInfo, FwsModule, FwsStatus, Game } from '@shared/types'
 import * as wm from './windowManager'
@@ -261,23 +262,58 @@ export function getGameInfo(game: Game): FwsGameInfo {
 //  4. Autorisation administrateur (une seule fois)
 // ----------------------------------------------------------------------------
 
-/** Les tâches existent-elles et lancent-elles bien CE FlawlessWidescreen.exe ? */
-async function isAuthorized(folder: string): Promise<boolean> {
-  return samePath(await getTaskCommand(TASK_LAUNCH), join(folder, EXE_NAME)) && (await getTaskCommand(TASK_CLOSE)) !== null
+/**
+ * Gamer Room peut-il modifier les réglages de FWS ?
+ * FWS est souvent installé dans Program Files, où Windows interdit d'écrire sans droits administrateur
+ * (erreur EPERM). On essaie vraiment : ouvrir settings.xml en écriture, et créer puis supprimer
+ * un petit fichier dans PluginCache (là où sont les réglages des correctifs).
+ */
+function canWriteFwsFiles(folder: string): boolean {
+  try {
+    const settingsFile = join(folder, 'settings.xml')
+    if (existsSync(settingsFile)) closeSync(openSync(settingsFile, 'r+'))
+    const probe = join(folder, 'PluginCache', '.gamer-room-test')
+    writeFileSync(probe, '')
+    unlinkSync(probe)
+    return true
+  } catch {
+    return false
+  }
 }
 
-/** Crée les deux tâches (lancer / fermer FWS). Windows demande l'autorisation une fois. */
+/**
+ * Tout est-il prêt ? Les tâches existent, lancent bien CE FlawlessWidescreen.exe,
+ * et Gamer Room a le droit de modifier les réglages de FWS.
+ */
+async function isAuthorized(folder: string): Promise<boolean> {
+  return (
+    samePath(await getTaskCommand(TASK_LAUNCH), join(folder, EXE_NAME)) &&
+    (await getTaskCommand(TASK_CLOSE)) !== null &&
+    canWriteFwsFiles(folder)
+  )
+}
+
+/**
+ * Crée les deux tâches (lancer / fermer FWS) et donne à l'utilisateur le droit de modifier
+ * les réglages de FWS (PluginCache et settings.xml, pas le programme lui-même).
+ * Windows demande l'autorisation une fois.
+ */
 export async function authorize(): Promise<boolean> {
   const folder = findFwsFolder()
   if (!folder) return false
-  return createAdminTasks([
-    { name: TASK_LAUNCH, command: join(folder, EXE_NAME), workingDir: folder },
-    {
-      name: TASK_CLOSE,
-      command: join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'taskkill.exe'),
-      args: `/IM ${EXE_NAME} /F`
-    }
-  ])
+  const writable = [{ path: join(folder, 'PluginCache'), folder: true }]
+  if (existsSync(join(folder, 'settings.xml'))) writable.push({ path: join(folder, 'settings.xml'), folder: false })
+  return createAdminTasks(
+    [
+      { name: TASK_LAUNCH, command: join(folder, EXE_NAME), workingDir: folder },
+      {
+        name: TASK_CLOSE,
+        command: join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'taskkill.exe'),
+        args: `/IM ${EXE_NAME} /F`
+      }
+    ],
+    writable
+  )
 }
 
 /** État de Flawless Widescreen pour l'écran des paramètres. */
