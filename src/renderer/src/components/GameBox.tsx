@@ -21,6 +21,17 @@ function colorFromName(name: string): number {
   return hash
 }
 
+/** Durée pendant laquelle un jeu est considéré comme "nouveau" : 24 heures, en millisecondes. */
+const NEW_GAME_DURATION_MS = 24 * 60 * 60 * 1000
+
+/** Vrai si le jeu a été ajouté à la bibliothèque il y a moins de 24 heures. */
+function isNewGame(addedAt: string): boolean {
+  const addedTime = new Date(addedAt).getTime()
+  // Date invalide ou absente : on n'affiche pas le badge
+  if (Number.isNaN(addedTime)) return false
+  return Date.now() - addedTime < NEW_GAME_DURATION_MS
+}
+
 export default function GameBox({ game, selected, onSelect, onLaunch }: Props) {
   const hue = colorFromName(game.name)
   const style = { '--hue': hue } as CSSProperties
@@ -51,6 +62,8 @@ export default function GameBox({ game, selected, onSelect, onLaunch }: Props) {
               </div>
             )}
             <div className="box-shine" />
+            {/* Badge "NOUVEAU" en haut à droite pour les jeux ajoutés il y a moins de 24 h */}
+            {isNewGame(game.addedAt) && <span className="box-badge-new">NOUVEAU</span>}
           </div>
         </div>
       </button>
