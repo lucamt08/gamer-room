@@ -1,0 +1,47 @@
+# Configuration d'electron-builder : fabrique l'installateur Windows (.exe NSIS)
+# et le publie dans les Releases GitHub (pour la mise à jour automatique).
+# Doc : https://www.electron.build
+
+appId: com.lucamt08.gamerroom
+productName: Gamer Room
+
+directories:
+  buildResources: build # icône, etc.
+  output: release # l'installateur généré arrive ici (ignoré par Git)
+
+# Fichiers à inclure dans l'appli (le reste du projet est exclu)
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+
+# koffi contient du code natif (.node) : il doit rester HORS de l'archive asar
+asarUnpack:
+  - node_modules/koffi/**
+  - node_modules/@koromix/**
+
+# koffi est déjà précompilé : pas besoin de recompiler les modules natifs
+npmRebuild: false
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+  # Pas d'espace dans le nom du fichier : GitHub les remplace par des points,
+  # ce qui casserait la mise à jour automatique.
+  artifactName: gamer-room-setup-${version}.${ext}
+
+nsis:
+  oneClick: false # installateur avec des étapes (choix du dossier)
+  perMachine: false # installation pour l'utilisateur courant, sans droits admin
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Gamer Room
+
+# Où publier les mises à jour : les Releases du dépôt GitHub
+publish:
+  provider: github
+  owner: lucamt08
+  repo: gamer-room
+  releaseType: release

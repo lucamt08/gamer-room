@@ -1,0 +1,35 @@
+{
+  "name": "gamer-room",
+  "productName": "Gamer Room",
+  "version": "0.1.0",
+  "description": "Hub de bibliothèque de jeux façon console pour Windows",
+  "main": "./out/main/index.js",
+  "author": "lucamt08",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist": "electron-vite build && electron-builder --win --publish never",
+    "release": "electron-vite build && electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11",
+    "koffi": "^3.3.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.11",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.4.0"
+  }
+}

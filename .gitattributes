@@ -1,0 +1,7 @@
+# Fins de ligne uniformes (LF) pour tout le monde : évite les faux conflits entre PC.
+* text=auto eol=lf
+
+# Fichiers binaires : à ne jamais modifier
+*.png binary
+*.ico binary
+*.jpg binary

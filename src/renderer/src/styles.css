@@ -1,0 +1,551 @@
+/* ==========================================================================
+   Styles de Gamer Room
+   Les couleurs sont des "variables" (--xxx) définies ici : change-les pour
+   modifier tout le thème d'un coup.
+   ========================================================================== */
+
+:root {
+  --bg: #0d0f14;
+  --bg-2: #151923;
+  --panel: #1b2030;
+  --border: #2a3145;
+  --text: #e8ecf4;
+  --muted: #8b93a7;
+  --accent: #4f8cff;
+  --accent-2: #7b5cff;
+  --danger: #ff5470;
+  --success: #3ddc97;
+  --box-width: 180px; /* largeur d'une boîte */
+  --box-depth: 32px; /* épaisseur de la tranche */
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+}
+
+body {
+  background: radial-gradient(ellipse at top, #1a2240 0%, var(--bg) 60%);
+}
+
+a {
+  color: var(--accent);
+}
+
+code,
+kbd {
+  font-family: Consolas, monospace;
+  font-size: 0.85em;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* ---------- Structure générale ---------- */
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+}
+
+.logo {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 4px;
+  font-weight: 800;
+}
+
+.logo span {
+  color: var(--accent);
+  margin-left: 6px;
+}
+
+.count {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ---------- Boutons ---------- */
+
+.btn {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.btn:hover,
+.btn:focus-visible {
+  background: #252c40;
+  border-color: var(--accent);
+  outline: none;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+}
+
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* ---------- Étagère ---------- */
+
+.shelf-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 28px 40px;
+}
+
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--box-width) + 60px), 1fr));
+  row-gap: 30px;
+}
+
+/* Chaque case a sa "planche" en dessous : mises bout à bout, elles forment l'étagère */
+.shelf-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0 8px;
+}
+
+.shelf-cell::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 30px;
+  height: 14px;
+  background: linear-gradient(#3a2f26, #241c16);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.6);
+  z-index: 0;
+}
+
+.shelf-empty {
+  text-align: center;
+  color: var(--muted);
+  margin-top: 15vh;
+  font-size: 16px;
+}
+
+.shelf-empty-title {
+  font-size: 26px;
+  color: var(--text);
+}
+
+/* ---------- Boîte de jeu (3D légère) ---------- */
+
+.box-wrap {
+  position: relative;
+  z-index: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  perspective: 1100px; /* distance de la "caméra" : plus petit = 3D plus marquée */
+  margin-bottom: 18px;
+}
+
+.box {
+  position: relative;
+  width: var(--box-width);
+  height: calc(var(--box-width) * 1.5); /* format 600x900 */
+  transform-style: preserve-3d;
+  transform: rotateY(20deg); /* légère inclinaison pour voir la tranche */
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.box-wrap.selected .box {
+  transform: rotateY(32deg) translateY(-12px) translateZ(30px) scale(1.06);
+}
+
+/* Face avant (la jaquette), avancée de l'épaisseur de la boîte */
+.box-front {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(var(--box-depth));
+  border-radius: 3px;
+  overflow: hidden;
+  background: #222;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+.box-front img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Reflet brillant sur le plastique de la boîte */
+.box-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.18) 0%, transparent 35%, transparent 70%, rgba(255, 255, 255, 0.06));
+  pointer-events: none;
+}
+
+/* Tranche de gauche : pivotée de 90° autour de son bord gauche */
+.box-spine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--box-depth);
+  height: 100%;
+  transform-origin: left center;
+  transform: rotateY(-90deg);
+  background: linear-gradient(90deg, hsl(var(--hue), 35%, 12%), hsl(var(--hue), 40%, 22%));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.box-spine span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 90%;
+}
+
+/* Boîte générique (pas de jaquette) */
+.box-generic {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 30% 20%, hsla(var(--hue), 80%, 60%, 0.5), transparent 60%),
+    linear-gradient(160deg, hsl(var(--hue), 50%, 25%), hsl(calc(var(--hue) + 40), 50%, 10%));
+}
+
+.box-generic-title {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: left;
+  color: white;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  word-break: break-word;
+}
+
+/* Halo autour de la boîte sélectionnée */
+.box-wrap.selected .box-front {
+  box-shadow:
+    0 0 0 3px var(--accent),
+    0 0 40px rgba(79, 140, 255, 0.55),
+    0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+.box-label {
+  position: relative;
+  z-index: 1;
+  max-width: calc(var(--box-width) + 40px);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 14px;
+}
+
+/* ---------- Barre du bas (jeu sélectionné) ---------- */
+
+.details {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 28px;
+  background: rgba(13, 15, 20, 0.85);
+  border-top: 1px solid var(--border);
+}
+
+.details-title {
+  font-size: 22px;
+  font-weight: 700;
+  min-width: 200px;
+}
+
+.details-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.details-help {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------- Superpositions ---------- */
+
+.running-overlay,
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(8, 10, 14, 0.88);
+  font-size: 22px;
+  z-index: 20;
+}
+
+.drop-overlay {
+  border: 3px dashed var(--accent);
+  pointer-events: none;
+}
+
+.toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--success);
+  padding: 10px 18px;
+  border-radius: 8px;
+  z-index: 40;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.toast-error {
+  border-left-color: var(--danger);
+}
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px;
+  background: linear-gradient(90deg, #1e3a8a, #4c1d95);
+  font-size: 14px;
+}
+
+.error-banner {
+  background: #5a1d2a;
+}
+
+/* ---------- Modales ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.modal {
+  width: min(720px, 92vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+  user-select: text;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.form label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+input[type='text'],
+input[type='password'],
+input:not([type]) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+}
+
+input:focus,
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hint.path {
+  font-family: Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+}
+
+.success {
+  color: var(--success);
+  margin: 0;
+}
+
+.search-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.search-row input {
+  flex: 1;
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.result {
+  text-align: left;
+}
+
+.grid-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.grid-thumb {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 2 / 3;
+}
+
+.grid-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.grid-thumb:hover,
+.grid-thumb:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}

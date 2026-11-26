@@ -1,0 +1,40 @@
+# GitHub Action : construit l'installateur Windows et publie une Release
+# à chaque fois qu'on pousse un tag qui commence par "v" (ex. v0.1.0).
+#
+# Pour publier une version : voir "Comment publier une nouvelle version" dans le README.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Autorise l'action à créer la Release et à y déposer l'installateur
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Vérifier les types TypeScript
+        run: npm run typecheck
+
+      - name: Construire et publier l'installateur
+        run: npm run release
+        env:
+          # Jeton fourni automatiquement par GitHub (aucune clé à configurer)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

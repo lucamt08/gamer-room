@@ -1,0 +1,35 @@
+# --- Dépendances (réinstallées avec "npm install") ---
+node_modules/
+
+# --- Fichiers générés par la compilation / l'empaquetage ---
+out/
+dist/
+release/
+*.tsbuildinfo
+
+# --- Fichiers de configuration locaux et SECRETS : ne jamais commiter ---
+.env
+.env.*
+!.env.example
+*.local
+*.local.json
+settings.json
+secrets.json
+*.key
+*.pem
+electron-builder.env
+
+# --- Réglages personnels de Claude Code (le CLAUDE.md, lui, est partagé) ---
+.claude/settings.local.json
+
+# --- Logs ---
+npm-debug.log*
+*.log
+
+# --- Fichiers système / éditeurs ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/
