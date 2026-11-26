@@ -12,6 +12,20 @@ import { useGamepad } from './input/useGamepad'
 import { handleModalNav } from './input/focusNav'
 import { cleanError, countColumns } from './utils'
 
+/**
+ * Transforme la date du dernier lancement en texte lisible :
+ * "Jamais joué", "Joué aujourd'hui", "Joué hier" ou "Joué il y a X jours".
+ * On compte en jours "calendaires" (minuit à minuit), pas en tranches de 24 h.
+ */
+function formatLastPlayed(lastPlayedAt: string | null): string {
+  if (!lastPlayedAt) return 'Jamais joué'
+  const startOfDay = (date: Date): number => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(lastPlayedAt))) / 86_400_000)
+  if (days <= 0) return "Joué aujourd'hui"
+  if (days === 1) return 'Joué hier'
+  return `Joué il y a ${days} jours`
+}
+
 /** Quelle fenêtre modale est ouverte (au plus une à la fois). */
 type ModalState =
   | null
@@ -36,6 +50,8 @@ export default function App() {
     return window.api.onRunningState((state) => {
       setRunning(state)
       if (state.message) showToast(state.message)
+      // Quand un jeu se ferme, on recharge la liste pour avoir la date de dernier lancement à jour
+      if (!state.running) window.api.getGames().then(setGames)
     })
   }, [])
 
@@ -228,7 +244,10 @@ export default function App() {
 
       {selectedGame && (
         <footer className="details">
-          <div className="details-title">{selectedGame.name}</div>
+          <div>
+            <div className="details-title">{selectedGame.name}</div>
+            <div className="hint">{formatLastPlayed(selectedGame.lastPlayedAt)}</div>
+          </div>
           <div className="details-actions">
             <button className="btn btn-primary" onClick={() => launch(selectedGame)} disabled={running.running}>
               ▶ Jouer
