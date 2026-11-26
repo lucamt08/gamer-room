@@ -6,6 +6,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC } from '@shared/ipc'
 import type {
   AutoCoverResult,
+  FwsGameInfo,
+  FwsStatus,
   Game,
   GamePatch,
   RunningState,
@@ -65,6 +67,14 @@ const api = {
   checkUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.checkUpdate),
   downloadUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.downloadUpdate),
   installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.installUpdate),
+
+  // --- Flawless Widescreen ---
+  /** Correctifs installés + celui reconnu pour ce jeu (écran "Modifier"). */
+  fwsGameInfo: (gameId: string): Promise<FwsGameInfo> => ipcRenderer.invoke(IPC.fwsGameInfo, gameId),
+  fwsStatus: (): Promise<FwsStatus> => ipcRenderer.invoke(IPC.fwsStatus),
+  /** Demande l'autorisation administrateur (une seule fois) pour lancer Flawless Widescreen. */
+  fwsAuthorize: (): Promise<FwsStatus> => ipcRenderer.invoke(IPC.fwsAuthorize),
+  fwsPickFolder: (): Promise<FwsStatus> => ipcRenderer.invoke(IPC.fwsPickFolder),
 
   getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.getVersion)
 }

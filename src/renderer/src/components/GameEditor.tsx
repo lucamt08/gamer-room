@@ -1,9 +1,11 @@
-// Écran "Modifier" : nom, arguments, option plein écran, temps de jeu de départ, suppression.
+// Écran "Modifier" : nom, arguments, option plein écran, temps de jeu de départ,
+// correctif Flawless Widescreen, suppression.
 import { forwardRef, useState } from 'react'
 import type { Game, GamePatch } from '@shared/types'
 import { formatPlaytime, playtimeFromSteam } from '@shared/playtime'
 import { canSkipLauncher, shouldSkipLauncher } from '@shared/launch'
 import Modal from './Modal'
+import FlawlessOption from './FlawlessOption'
 
 interface Props {
   game: Game
@@ -26,6 +28,7 @@ const GameEditor = forwardRef<HTMLDivElement, Props>(function GameEditor(
   const [hours, setHours] = useState(String(Math.floor(startSeconds / 3600)))
   const [minutes, setMinutes] = useState(String(Math.floor((startSeconds % 3600) / 60)))
   const [playtimeChanged, setPlaytimeChanged] = useState(false)
+  const [fwsModule, setFwsModule] = useState(game.fwsModule ?? 'auto')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -35,6 +38,7 @@ const GameEditor = forwardRef<HTMLDivElement, Props>(function GameEditor(
       const patch: GamePatch = canSkipLauncher(game)
         ? { name, args, forceFullscreen, skipLauncher }
         : { name, args, forceFullscreen }
+      if (fwsModule !== (game.fwsModule ?? 'auto')) patch.fwsModule = fwsModule
       // Le temps de jeu n'est envoyé que s'il a été modifié : sinon on écraserait le temps
       // compté pendant que cet écran était ouvert
       if (playtimeChanged) {
@@ -113,6 +117,7 @@ const GameEditor = forwardRef<HTMLDivElement, Props>(function GameEditor(
             </span>
           </label>
         )}
+        <FlawlessOption gameId={game.id} value={fwsModule} onChange={setFwsModule} />
         {canSkipLauncher(game) && (
           <label className="checkbox">
             <input type="checkbox" checked={skipLauncher} onChange={(e) => setSkipLauncher(e.target.checked)} />

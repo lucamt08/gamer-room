@@ -40,5 +40,11 @@ export const IPC = {
   downloadUpdate: 'update:download',
   installUpdate: 'update:install',
 
+  // Flawless Widescreen
+  fwsGameInfo: 'fws:game-info',
+  fwsStatus: 'fws:status',
+  fwsAuthorize: 'fws:authorize',
+  fwsPickFolder: 'fws:pick-folder',
+
   getVersion: 'app:version'
 } as const

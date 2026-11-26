@@ -1,5 +1,6 @@
 // Écran "Paramètres", en trois onglets :
-//  - Général         : clé SteamGridDB, raccourci de fermeture, plein écran, son du défilement, temps de jeu ;
+//  - Général         : clé SteamGridDB, raccourci de fermeture, plein écran, son du défilement, temps de jeu,
+//                      Flawless Widescreen ;
 //  - Clavier / Souris : vitesse et accélération de la molette, glisser à la souris ;
 //  - Manette         : vitesse et accélération quand on maintient une direction.
 // Un seul bouton "Enregistrer" pour tous les onglets.
@@ -7,6 +8,7 @@ import { forwardRef, useEffect, useState } from 'react'
 import type { Settings } from '@shared/types'
 import Modal from './Modal'
 import SettingSlider from './SettingSlider'
+import FlawlessSettings from './FlawlessSettings'
 import { WHEEL_LEVELS } from '../input/useWheelScroll'
 import { playTick } from '../sound'
 
@@ -146,6 +148,8 @@ const SettingsPanel = forwardRef<HTMLDivElement, Props>(function SettingsPanel({
               quitter. Pour la fermer vraiment : clic droit sur son icône → Quitter. Les jeux Steam sont toujours
               à jour (leur temps vient de Steam).
             </p>
+
+            <FlawlessSettings />
           </>
         )}
 

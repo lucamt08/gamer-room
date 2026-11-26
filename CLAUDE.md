@@ -30,6 +30,8 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   background.ts    Option « compter en dehors de l'appli » : icône près de l'horloge + démarrage avec Windows
   playtimeTracker.ts Compteur de temps de jeu (regarde les programmes ouverts toutes les 10 s)
   steamPlaytime.ts Lit le temps de jeu enregistré par Steam (userdata\<compte>\config\localconfig.vdf)
+  flawless.ts      Flawless Widescreen : trouve FWS, lit ses correctifs, coche « Fix Enabled » avant le jeu
+  adminTasks.ts    Tâches planifiées Windows pour lancer un programme en admin (autorisation donnée une fois)
   windowManager.ts TOUT le code Win32 (processus, fenêtres, borderless). N'importe pas Electron.
   gameLauncher.ts  Lancement, recherche de fenêtre (30 s), suivi du processus, kill
   library.ts       CRUD des jeux (library.json), résolution des .lnk

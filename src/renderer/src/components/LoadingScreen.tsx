@@ -11,6 +11,7 @@ interface Props {
 
 /** Texte affiché sous le nom du jeu, selon l'étape du lancement. */
 function phaseText(game: Game | undefined, phase: RunningState['phase']): string {
+  if (phase === 'flawless') return 'Activation du correctif Flawless Widescreen…'
   if (phase === 'launcher') return 'Le launcher est ouvert : clique sur « Jouer » pour démarrer le jeu'
   if (game?.launchKind === 'steam') return 'Steam démarre le jeu…'
   if (game?.launchKind === 'launcher' && !shouldSkipLauncher(game)) return 'Ouverture du launcher…'
