@@ -46,5 +46,9 @@ export const IPC = {
   fwsAuthorize: 'fws:authorize',
   fwsPickFolder: 'fws:pick-folder',
 
+  // Menu en jeu (appui long sur le bouton Guide / PS)
+  overlayOpened: 'overlay:opened', // main → menu (le menu vient de s'ouvrir, avec les infos du jeu)
+  overlayAction: 'overlay:action',
+
   getVersion: 'app:version'
 } as const

@@ -40,6 +40,8 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   covers.ts        Cache des jaquettes (userData/covers) + protocole cover://
   updater.ts       electron-updater
   shortcuts.ts     Raccourci global de fermeture forcée
+  guideButton.ts   Bouton Xbox / PS de la manette (appui court / long), lu même hub caché
+  gameOverlay.ts   Menu en jeu : fenêtre transparente sur le côté, par-dessus le jeu (#overlay)
   ipc.ts           Tous les ipcMain.handle
 src/preload/     contextBridge → window.api (fonctions IPC explicites uniquement)
 src/renderer/    Interface React (App.tsx, components/, input/ clavier+manette)

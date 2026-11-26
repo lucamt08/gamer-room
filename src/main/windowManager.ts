@@ -108,6 +108,9 @@ const Process32FirstW = kernel32.func('bool __stdcall Process32FirstW(void *snap
 const Process32NextW = kernel32.func('bool __stdcall Process32NextW(void *snap, _Inout_ PROCESSENTRY32W *entry)')
 const CloseHandle = kernel32.func('bool __stdcall CloseHandle(void *handle)')
 const OpenProcess = kernel32.func('void * __stdcall OpenProcess(uint32 access, bool inherit, uint32 pid)')
+const GetProcessTimes = kernel32.func(
+  'bool __stdcall GetProcessTimes(void *process, _Out_ uint64 *creation, _Out_ uint64 *exit, _Out_ uint64 *kernel, _Out_ uint64 *user)'
+)
 const QueryFullProcessImageNameW = kernel32.func(
   'bool __stdcall QueryFullProcessImageNameW(void *process, uint32 flags, _Out_ uint8_t *buf, _Inout_ uint32 *size)'
 )
@@ -212,8 +215,19 @@ export function snapshotProcesses(): Map<number, ProcessInfo> {
  * Utile pour les jeux lancés via un "launcher" qui démarre un autre processus.
  * Ça marche même si le launcher s'est déjà fermé : ses enfants gardent
  * son pid comme "parentPid".
+ *
+ * ⚠️ Piège : Windows RÉUTILISE les numéros (pid) des programmes fermés. Un vieux programme dont le
+ * parent est fermé depuis longtemps (l'Explorateur Windows, par exemple) peut donc avoir pour
+ * "parentPid" le numéro qu'a reçu plus tard notre jeu. Pour ne pas le prendre pour un enfant du jeu :
+ *  - un enfant doit avoir démarré APRÈS son parent ;
+ *  - `startedAfter` (heure, comme Date.now()) : on ignore tout programme démarré avant (ex. avant le
+ *    lancement du jeu). Indispensable quand le parent est déjà fermé (on ne connaît plus son heure).
  */
-export function getProcessTree(rootPid: number, processes = snapshotProcesses()): Set<number> {
+export function getProcessTree(
+  rootPid: number,
+  processes = snapshotProcesses(),
+  startedAfter?: number
+): Set<number> {
   // On construit une table parent -> enfants
   const children = new Map<number, number[]>()
   for (const p of processes.values()) {
@@ -222,19 +236,81 @@ export function getProcessTree(rootPid: number, processes = snapshotProcesses())
     list.push(p.pid)
     children.set(p.parentPid, list)
   }
+  // Heures de démarrage, lues seulement pour les programmes qu'on examine
+  const startTimes = new Map<number, number | null>()
+  const startOf = (pid: number): number | null => {
+    if (!startTimes.has(pid)) startTimes.set(pid, getProcessStartTime(pid))
+    return startTimes.get(pid) ?? null
+  }
+
   // Parcours en largeur à partir de la racine
   const tree = new Set<number>([rootPid])
   const queue = [rootPid]
   while (queue.length > 0) {
     const current = queue.shift()!
     for (const child of children.get(current) ?? []) {
-      if (!tree.has(child)) {
-        tree.add(child)
-        queue.push(child)
-      }
+      if (tree.has(child)) continue
+      const childStart = startOf(child)
+      const parentStart = processes.has(current) ? startOf(current) : null
+      // Démarré avant son "parent" ou avant le lancement : ce n'est pas un vrai enfant (numéro réutilisé)
+      if (childStart !== null && parentStart !== null && childStart < parentStart) continue
+      if (childStart !== null && startedAfter !== undefined && childStart < startedAfter) continue
+      tree.add(child)
+      queue.push(child)
     }
   }
   return tree
+}
+
+/**
+ * Heure de démarrage d'un processus (millisecondes, comme Date.now()), ou null si Windows refuse.
+ * Windows la donne en "FILETIME" : nombre de 100 nanosecondes depuis le 1er janvier 1601.
+ */
+export function getProcessStartTime(pid: number): number | null {
+  const handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+  if (!handle) return null
+  try {
+    const creation = [0n]
+    const ignored = [0n]
+    if (!GetProcessTimes(handle, creation, ignored, ignored, ignored)) return null
+    return Number(BigInt(creation[0]) / 10_000n) - 11_644_473_600_000 // 1601 → 1970
+  } finally {
+    CloseHandle(handle)
+  }
+}
+
+/**
+ * Programmes qu'on ne ferme JAMAIS, même s'ils semblent faire partie du jeu :
+ * le cœur de Windows (bureau, barre des tâches…) et Steam.
+ */
+const PROTECTED_EXES = new Set([
+  'explorer.exe',
+  'dwm.exe',
+  'csrss.exe',
+  'winlogon.exe',
+  'wininit.exe',
+  'services.exe',
+  'lsass.exe',
+  'smss.exe',
+  'svchost.exe',
+  'sihost.exe',
+  'taskhostw.exe',
+  'ctfmon.exe',
+  'fontdrvhost.exe',
+  'runtimebroker.exe',
+  'searchhost.exe',
+  'startmenuexperiencehost.exe',
+  'shellexperiencehost.exe',
+  'textinputhost.exe',
+  'applicationframehost.exe',
+  'steam.exe',
+  'steamwebhelper.exe',
+  'steamservice.exe'
+])
+
+/** Ce programme est-il protégé (jamais fermé de force par Gamer Room) ? */
+export function isProtectedProcess(exeName: string): boolean {
+  return PROTECTED_EXES.has(exeName.toLowerCase())
 }
 
 /**
@@ -517,4 +593,194 @@ export function makeBorderlessFullscreen(hwnd: Hwnd): boolean {
   // 4. Premier plan
   bringToFront(hwnd)
   return Boolean(ok)
+}
+
+// ----------------------------------------------------------------------------
+//  10. Manettes : bouton Guide (Xbox) et bouton PS (PlayStation)
+// ----------------------------------------------------------------------------
+//
+//  Pourquoi ici et pas dans l'interface ? La Gamepad API de l'interface ne marche que quand
+//  le hub est affiché. Or on veut entendre ce bouton même quand le hub est caché (en jeu)
+//  ou fermé (Gamer Room près de l'horloge). On lit donc les manettes directement auprès de Windows.
+//
+//  - Manettes Xbox (et toutes celles vues comme Xbox : Steam Input, DS4Windows…) : XInput.
+//    La fonction officielle XInputGetState ne donne PAS le bouton Guide ; on utilise sa version
+//    « cachée » XInputGetStateEx (numéro 100 dans xinput1_4.dll), comme le fait Chromium.
+//  - Manettes PlayStation branchées directement (DualShock 4, DualSense) : on lit leurs « rapports »
+//    HID (les paquets d'octets envoyés par la manette) et on regarde le bit du bouton PS.
+
+const xinput = koffi.load('xinput1_4.dll')
+const cfgmgr32 = koffi.load('cfgmgr32.dll')
+const hid = koffi.load('hid.dll')
+
+const XINPUT_GAMEPAD = koffi.struct('XINPUT_GAMEPAD', {
+  wButtons: 'uint16',
+  bLeftTrigger: 'uint8',
+  bRightTrigger: 'uint8',
+  sThumbLX: 'int16',
+  sThumbLY: 'int16',
+  sThumbRX: 'int16',
+  sThumbRY: 'int16'
+})
+const XINPUT_STATE_EX = koffi.struct('XINPUT_STATE_EX', {
+  dwPacketNumber: 'uint32',
+  Gamepad: XINPUT_GAMEPAD,
+  dwPaddingReserved: 'uint32' // octets en plus de la version "Ex"
+})
+const GUID = koffi.struct('GUID', {
+  Data1: 'uint32',
+  Data2: 'uint16',
+  Data3: 'uint16',
+  Data4: koffi.array('uint8', 8)
+})
+const HIDD_ATTRIBUTES = koffi.struct('HIDD_ATTRIBUTES', {
+  Size: 'uint32',
+  VendorID: 'uint16',
+  ProductID: 'uint16',
+  VersionNumber: 'uint16'
+})
+void GUID // le type est utilisé par son nom dans les signatures ci-dessous
+
+const XInputGetStateEx = xinput.func('__stdcall', 100, 'uint32', ['uint32', koffi.out(koffi.pointer(XINPUT_STATE_EX))])
+const CM_Get_Device_Interface_List_SizeW = cfgmgr32.func(
+  'uint32 __stdcall CM_Get_Device_Interface_List_SizeW(_Out_ uint32 *len, GUID *guid, void *device, uint32 flags)'
+)
+const CM_Get_Device_Interface_ListW = cfgmgr32.func(
+  'uint32 __stdcall CM_Get_Device_Interface_ListW(GUID *guid, void *device, _Out_ uint8_t *buf, uint32 len, uint32 flags)'
+)
+const CreateFileW = kernel32.func(
+  'void * __stdcall CreateFileW(str16 name, uint32 access, uint32 share, void *security, uint32 creation, uint32 flags, void *template)'
+)
+const ReadFile = kernel32.func(
+  'bool __stdcall ReadFile(void *file, _Out_ uint8_t *buf, uint32 size, _Out_ uint32 *read, void *overlapped)'
+)
+const HidD_GetAttributes = hid.func('bool __stdcall HidD_GetAttributes(void *device, _Inout_ HIDD_ATTRIBUTES *attributes)')
+
+const XINPUT_GAMEPAD_GUIDE = 0x0400 // bit du bouton Guide (non documenté)
+const ERROR_SUCCESS = 0
+const GENERIC_READ = 0x80000000
+const FILE_SHARE_READ_WRITE = 0x1 | 0x2 // on partage la manette avec les jeux, Steam…
+const OPEN_EXISTING = 3
+/** Identifiant Windows de la famille "périphériques HID" (claviers, souris, manettes…). */
+const GUID_DEVINTERFACE_HID = {
+  Data1: 0x4d1e55b2,
+  Data2: 0xf16f,
+  Data3: 0x11cf,
+  Data4: [0x88, 0xcb, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30]
+}
+const SONY_VENDOR_ID = 0x054c
+/** Numéros de modèle Sony : DualShock 4 (2 versions + adaptateur sans fil) et DualSense (+ Edge). */
+const DUALSHOCK4_IDS = [0x05c4, 0x09cc, 0x0ba0]
+const DUALSENSE_IDS = [0x0ce6, 0x0df2]
+
+/** XInput dit "pas de manette" sur un emplacement : on ne le réinterroge que toutes les 2 s (c'est lent). */
+const XINPUT_RETRY_DELAY = 2000
+const xinputEmptyUntil = [0, 0, 0, 0]
+
+/** Le bouton Guide d'une manette Xbox (XInput, 4 emplacements) est-il enfoncé ? */
+export function isXboxGuidePressed(): boolean {
+  const now = Date.now()
+  let pressed = false
+  for (let slot = 0; slot < 4; slot++) {
+    if (now < xinputEmptyUntil[slot]) continue
+    const state: { Gamepad?: { wButtons: number } } = {}
+    if (XInputGetStateEx(slot, state) !== ERROR_SUCCESS) {
+      xinputEmptyUntil[slot] = now + XINPUT_RETRY_DELAY
+      continue
+    }
+    if ((state.Gamepad?.wButtons ?? 0) & XINPUT_GAMEPAD_GUIDE) pressed = true
+  }
+  return pressed
+}
+
+/** Une manette PlayStation ouverte en lecture. */
+export interface SonyPad {
+  handle: unknown
+  path: string
+  kind: 'ds4' | 'dualsense'
+  bluetooth: boolean
+  /** Mémoire où Windows écrit chaque rapport (une seule lecture à la fois par manette). */
+  buffer: Buffer
+}
+
+/** Chemins Windows de tous les périphériques HID branchés. */
+function listHidPaths(): string[] {
+  const length = [0]
+  if (CM_Get_Device_Interface_List_SizeW(length, GUID_DEVINTERFACE_HID, null, 0) !== 0 || !length[0]) return []
+  const buffer = Buffer.alloc(length[0] * 2)
+  if (CM_Get_Device_Interface_ListW(GUID_DEVINTERFACE_HID, null, buffer, length[0], 0) !== 0) return []
+  return buffer.toString('utf16le').split('\0').filter(Boolean)
+}
+
+/** Modèle d'une manette Sony d'après son numéro, ou null si ce n'est pas une manette connue. */
+function sonyKind(vendor: number, product: number): SonyPad['kind'] | null {
+  if (vendor !== SONY_VENDOR_ID) return null
+  if (DUALSENSE_IDS.includes(product)) return 'dualsense'
+  if (DUALSHOCK4_IDS.includes(product)) return 'ds4'
+  return null
+}
+
+/**
+ * Ouvre les manettes PlayStation branchées (sauf celles déjà ouvertes, dont on donne les chemins).
+ * Les fermer avec closeSonyPad.
+ */
+export function openSonyPads(alreadyOpen: Set<string>): SonyPad[] {
+  const pads: SonyPad[] = []
+  for (const path of listHidPaths()) {
+    // Tri rapide sur le texte du chemin avant d'ouvrir quoi que ce soit (054c = Sony)
+    if (!/054c/i.test(path) || alreadyOpen.has(path)) continue
+    const handle = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ_WRITE, null, OPEN_EXISTING, 0, null)
+    // INVALID_HANDLE_VALUE vaut -1, soit 0xFFFFFFFFFFFFFFFF en pointeur 64 bits.
+    if (!handle || handle === 0xffffffffffffffffn) continue
+    const attributes: Record<string, unknown> = { Size: koffi.sizeof(HIDD_ATTRIBUTES) }
+    const kind = HidD_GetAttributes(handle, attributes)
+      ? sonyKind(attributes.VendorID as number, attributes.ProductID as number)
+      : null
+    if (!kind) {
+      CloseHandle(handle)
+      continue
+    }
+    // Bluetooth : le chemin contient l'identifiant du service HID Bluetooth (00001124-…)
+    pads.push({ handle, path, kind, bluetooth: /00001124-/i.test(path), buffer: Buffer.alloc(512) })
+  }
+  return pads
+}
+
+export function closeSonyPad(pad: SonyPad): void {
+  CloseHandle(pad.handle)
+}
+
+/**
+ * Lit UN rapport de la manette, sans bloquer l'appli (la lecture se fait dans un autre fil).
+ * `callback(pressed)` : le bouton PS est-il enfoncé ? `pressed` vaut null si la manette a été débranchée.
+ */
+export function readSonyPsButton(pad: SonyPad, callback: (pressed: boolean | null) => void): void {
+  const read = [0]
+  ReadFile.async(pad.handle, pad.buffer, pad.buffer.length, read, null, (error: unknown, ok: boolean) => {
+    if (error || !ok || read[0] === 0) return callback(null)
+    callback(psButtonFromReport(pad, pad.buffer))
+  })
+}
+
+/**
+ * Où se trouve le bouton PS dans le rapport (bit 0 d'un octet qui dépend du modèle et du branchement) :
+ *  - DualSense USB (rapport 0x01) : octet 10 ; Bluetooth complet (0x31) : octet 11 ; Bluetooth simple (0x01) : octet 7 ;
+ *  - DualShock 4 USB ou Bluetooth simple (0x01) : octet 7 ; Bluetooth complet (0x11) : octet 9.
+ */
+function psButtonFromReport(pad: SonyPad, report: Buffer): boolean {
+  const id = report[0]
+  let index = -1
+  if (pad.kind === 'dualsense') {
+    if (id === 0x31) index = 11
+    else if (id === 0x01) index = pad.bluetooth ? 7 : 10
+  } else {
+    if (id === 0x11) index = 9
+    else if (id === 0x01) index = 7
+  }
+  return index >= 0 && (report[index] & 0x01) !== 0
+}
+
+/** Le HWND d'une fenêtre Electron (BrowserWindow.getNativeWindowHandle() renvoie 8 octets). */
+export function hwndFromBuffer(buffer: Buffer): Hwnd {
+  return buffer.readBigUInt64LE(0)
 }

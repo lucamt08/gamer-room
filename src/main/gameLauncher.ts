@@ -86,6 +86,12 @@ export function isGameRunning(): boolean {
   return session !== null || preparing !== null
 }
 
+/** Le jeu en cours, seulement quand on est vraiment « en jeu » (hub caché), sinon null. Sert au menu en jeu. */
+export function getPlayingGame(): { game: Game; gameWindow: wm.Hwnd | null; startedAt: number } | null {
+  if (!session || session.phase !== 'playing') return null
+  return { game: session.game, gameWindow: session.gameWindow, startedAt: session.startedAt }
+}
+
 /**
  * Découpe une ligne d'arguments en liste, en respectant les guillemets.
  * Exemple : `-w 1920 "C:\Mon dossier\save"` → ['-w', '1920', 'C:\Mon dossier\save']
@@ -274,7 +280,7 @@ function coversScreen(w: wm.WindowInfo): boolean {
 function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.WindowInfo | null } {
   const g = s.game
   const windows = wm.listAppWindows().filter((w) => w.pid !== process.pid)
-  const tree = wm.getProcessTree(s.rootPid)
+  const tree = wm.getProcessTree(s.rootPid, undefined, launchTime(s))
   const biggestFirst = (list: wm.WindowInfo[]): wm.WindowInfo[] => list.sort((a, b) => area(b) - area(a))
 
   // Jeu Steam : un programme de son dossier dont le nom contient "launcher" est le launcher
@@ -331,7 +337,7 @@ function hideHubSoon(s: Session): void {
 /** La fenêtre du jeu vient d'être trouvée : on passe en phase "en jeu". */
 function onGameWindowFound(s: Session, win: wm.WindowInfo): void {
   s.gameWindow = win.hwnd
-  for (const pid of wm.getProcessTree(win.pid)) s.gamePids.add(pid)
+  for (const pid of wm.getProcessTree(win.pid, undefined, launchTime(s))) s.gamePids.add(pid)
 
   if (s.phase !== 'playing') {
     s.phase = 'playing'
@@ -443,8 +449,8 @@ function startProcessWatch(s: Session): void {
 
     const processes = wm.snapshotProcesses()
     // On ajoute les nouveaux descendants du processus lancé, et ceux du jeu
-    if (s.game.launchKind !== 'steam') for (const pid of wm.getProcessTree(s.rootPid, processes)) s.knownPids.add(pid)
-    for (const pid of [...s.gamePids]) for (const child of wm.getProcessTree(pid, processes)) s.gamePids.add(child)
+    if (s.game.launchKind !== 'steam') for (const pid of wm.getProcessTree(s.rootPid, processes, launchTime(s))) s.knownPids.add(pid)
+    for (const pid of [...s.gamePids]) for (const child of wm.getProcessTree(pid, processes, launchTime(s))) s.gamePids.add(child)
 
     let alive: boolean
     if (s.gameWindow) {
@@ -491,8 +497,15 @@ function endSession(message?: string): void {
 
 /**
  * Force la fermeture du jeu en cours (raccourci global, ou bouton "Annuler" de l'écran de chargement).
- * On utilise `taskkill /T /F` : /T tue aussi les processus enfants, /F force.
+ * On utilise `taskkill /F` (/F = forcer) sur chaque programme du jeu, un par un.
  * Pour un jeu Steam, on ne ferme jamais Steam lui-même : seulement le jeu.
+ *
+ * Sécurité (un « vieux » programme avait été pris pour un enfant du jeu et l'Explorateur Windows fermé,
+ * à cause des numéros de programme que Windows réutilise, voir getProcessTree) :
+ *  - plus de `taskkill /T` : il cherche lui-même les enfants par numéro, sans vérifier les heures de démarrage.
+ *    On ferme seulement la liste qu'on a vérifiée nous-mêmes (recalculée juste avant) ;
+ *  - on ne ferme jamais un programme démarré avant le lancement du jeu ;
+ *  - on ne ferme jamais les programmes vitaux de Windows ni Steam (wm.isProtectedProcess).
  */
 export function killRunningGame(): void {
   // Annulé pendant la préparation de Flawless Widescreen : le jeu ne sera pas lancé
@@ -505,13 +518,34 @@ export function killRunningGame(): void {
   if (!s) return
   console.log(`[launcher] Fermeture forcée de "${s.game.name}"`)
   const processes = wm.snapshotProcesses()
-  const targets = s.game.launchKind === 'steam' ? s.gamePids : new Set([...s.knownPids, ...s.gamePids])
+  const roots = s.game.launchKind === 'steam' ? s.gamePids : new Set([...s.knownPids, ...s.gamePids])
+  // On ajoute les enfants apparus depuis la dernière vérification (même règles que getProcessTree)
+  const targets = new Set<number>()
+  for (const pid of roots) for (const child of wm.getProcessTree(pid, processes, launchTime(s))) targets.add(child)
+
   for (const pid of targets) {
-    if (processes.has(pid)) {
-      execFile('taskkill', ['/PID', String(pid), '/T', '/F'], (error) => {
-        if (error) console.warn(`[launcher] taskkill ${pid} :`, error.message)
-      })
+    const info = processes.get(pid)
+    if (!info || pid === process.pid) continue
+    if (wm.isProtectedProcess(info.exeName)) {
+      console.warn(`[launcher] ${info.exeName} (pid ${pid}) est protégé : on ne le ferme pas`)
+      continue
     }
+    const start = wm.getProcessStartTime(pid)
+    if (start !== null && start < launchTime(s)) {
+      console.warn(`[launcher] ${info.exeName} (pid ${pid}) tournait avant le jeu : on ne le ferme pas`)
+      continue
+    }
+    execFile('taskkill', ['/PID', String(pid), '/F'], (error) => {
+      if (error) console.warn(`[launcher] taskkill ${pid} :`, error.message)
+    })
   }
   endSession('Jeu fermé de force')
+}
+
+/**
+ * Heure à partir de laquelle un programme peut faire partie du jeu : le lancement, moins 10 s de marge
+ * (le .exe démarre juste avant qu'on note l'heure du lancement).
+ */
+function launchTime(s: Session): number {
+  return s.startedAt - 10_000
 }

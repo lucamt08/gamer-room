@@ -8,6 +8,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { getSettings } from './settings'
+import * as wm from './windowManager'
 
 let hub: BrowserWindow | null = null
 
@@ -21,8 +22,11 @@ export function sendToHub(channel: string, payload: unknown): void {
   getHub()?.webContents.send(channel, payload)
 }
 
-/** Crée la fenêtre du hub. Elle s'affiche toute seule une fois prête. */
-export function createHub(): BrowserWindow {
+/**
+ * Crée la fenêtre du hub. Elle s'affiche toute seule une fois prête.
+ * `fullscreen` : forcer le plein écran (bouton Guide / PS), sinon on suit le paramètre « Démarrer en plein écran ».
+ */
+export function createHub(fullscreen = false): BrowserWindow {
   const window = new BrowserWindow({
     width: 1400,
     height: 860,
@@ -42,8 +46,9 @@ export function createHub(): BrowserWindow {
   })
 
   window.once('ready-to-show', () => {
-    if (getSettings().startFullscreen) window.setFullScreen(true)
+    if (fullscreen || getSettings().startFullscreen) window.setFullScreen(true)
     window.show()
+    if (fullscreen) wm.bringToFront(wm.hwndFromBuffer(window.getNativeWindowHandle()))
   })
 
   // Les liens externes (ex. site SteamGridDB) s'ouvrent dans le navigateur, pas dans le hub
@@ -75,5 +80,23 @@ export function showHub(): void {
   }
   if (window.isMinimized()) window.restore()
   window.show()
+  window.focus()
+}
+
+/**
+ * Bouton Guide / PS de la manette : ouvre le hub en plein écran, devant tout le reste
+ * (même si Gamer Room était seulement près de l'horloge).
+ */
+export function showHubFullscreen(): void {
+  const window = getHub()
+  if (!window) {
+    createHub(true)
+    return
+  }
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.setFullScreen(true)
+  // Windows empêche une appli en arrière-plan de prendre le focus : on utilise l'astuce de windowManager
+  wm.bringToFront(wm.hwndFromBuffer(window.getNativeWindowHandle()))
   window.focus()
 }
