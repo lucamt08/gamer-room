@@ -5,18 +5,20 @@
    ========================================================================== */
 
 :root {
-  --bg: #0d0f14;
-  --bg-2: #151923;
-  --panel: #1b2030;
-  --border: #2a3145;
-  --text: #e8ecf4;
+  --bg: #05070c;
+  --bg-2: #10141d;
+  --panel: #161b27;
+  --border: #252c3d;
+  --text: #eef2f8;
   --muted: #8b93a7;
-  --accent: #4f8cff;
+  --accent: #6fa8ff;
   --accent-2: #7b5cff;
   --danger: #ff5470;
   --success: #3ddc97;
-  --box-width: 180px; /* largeur d'une boîte */
-  --box-depth: 32px; /* épaisseur de la tranche */
+  --box-width: clamp(120px, 19vh, 210px); /* largeur d'une boîte (s'adapte à la hauteur de la fenêtre) */
+  --box-height: calc(var(--box-width) * 1.5); /* format jaquette 600x900 */
+  --box-depth: calc(var(--box-width) * 0.14); /* épaisseur du boîtier */
+  --focus-scale: 1.32; /* agrandissement de la boîte du centre */
   font-family: 'Segoe UI', system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -35,8 +37,10 @@ body,
   user-select: none;
 }
 
+/* Fond noir avec une lumière bleutée derrière le centre de l'écran */
 body {
-  background: radial-gradient(ellipse at top, #1a2240 0%, var(--bg) 60%);
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 38%, #0d1b33 0%, #05070c 55%, #000 100%);
 }
 
 a {
@@ -47,8 +51,8 @@ code,
 kbd {
   font-family: Consolas, monospace;
   font-size: 0.85em;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   padding: 0 4px;
 }
@@ -62,17 +66,19 @@ kbd {
 }
 
 .topbar {
+  position: relative;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 28px;
+  padding: 18px 32px;
 }
 
 .logo {
   margin: 0;
-  font-size: 22px;
-  letter-spacing: 4px;
-  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 6px;
+  font-weight: 700;
 }
 
 .logo span {
@@ -82,36 +88,45 @@ kbd {
 
 .count {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
 
 .spacer {
   flex: 1;
 }
 
-/* ---------- Boutons ---------- */
+/* ---------- Boutons (pilules en verre dépoli) ---------- */
 
 .btn {
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 7px 16px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  backdrop-filter: blur(12px);
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.1s;
 }
 
 .btn:hover,
 .btn:focus-visible {
-  background: #252c40;
-  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(160, 200, 255, 0.5);
+  box-shadow: 0 0 20px rgba(80, 140, 255, 0.25);
   outline: none;
 }
 
 .btn:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .btn:disabled {
@@ -119,9 +134,18 @@ kbd {
   cursor: default;
 }
 
+/* Bouton principal ("Jouer") : pilule blanche */
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: #fff;
+  color: #000;
+  font-weight: 600;
   border-color: transparent;
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  background: #fff;
+  box-shadow: 0 0 28px rgba(255, 255, 255, 0.35);
 }
 
 .btn-danger {
@@ -134,39 +158,89 @@ kbd {
   border-color: transparent;
 }
 
-/* ---------- Étagère ---------- */
+/* ---------- Carrousel ---------- */
 
 .shelf-scroll {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px 28px 40px;
-}
-
-.shelf {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(calc(var(--box-width) + 60px), 1fr));
-  row-gap: 30px;
-}
-
-/* Chaque case a sa "planche" en dessous : mises bout à bout, elles forment l'étagère */
-.shelf-cell {
+  min-height: 0;
   position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 20px 0 8px;
+  justify-content: center;
 }
 
-.shelf-cell::after {
-  content: '';
+/* La scène : la zone des boîtes (en haut) + la zone du reflet (en bas) */
+.cf-stage {
+  --stage-height: calc(var(--box-height) * var(--focus-scale) + 24px);
+  --reflect-height: calc(var(--box-height) * 0.5);
+  position: relative;
+  width: 100%;
+  height: calc(var(--stage-height) + var(--reflect-height));
+  /* Les boîtes s'effacent doucement vers les bords de l'écran */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+
+/* Halo de lumière bleutée derrière le jeu du centre */
+.cf-light {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: calc(var(--box-width) * 5);
+  height: var(--stage-height);
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 45%, rgba(70, 130, 255, 0.22), transparent 62%);
+  pointer-events: none;
+}
+
+/* La rangée de boîtes, reflétée sous elle-même pour faire un sol brillant */
+.cf-track {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 30px;
-  height: 14px;
-  background: linear-gradient(#3a2f26, #241c16);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.6);
-  z-index: 0;
+  top: 0;
+  height: var(--stage-height);
+  perspective: 1300px; /* distance de la "caméra" : plus petit = 3D plus marquée */
+  perspective-origin: 50% 40%;
+  -webkit-box-reflect: below 2px linear-gradient(transparent 58%, rgba(0, 0, 0, 0.38));
+}
+
+/* Ligne d'horizon du sol + léger voile bleuté */
+.cf-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--stage-height);
+  height: var(--reflect-height);
+  border-top: 1px solid rgba(140, 180, 255, 0.12);
+  background: linear-gradient(to bottom, rgba(120, 170, 255, 0.07), transparent 70%);
+  pointer-events: none;
+}
+
+/*
+  Une case du carrousel. Sa place est calculée à partir de :
+    --side : -1 (à gauche), 0 (au centre), 1 (à droite)
+    --dist : distance au centre (0, 1, 2...)
+  Les boîtes des côtés sont tournées vers le centre et serrées les unes contre les autres.
+*/
+.cf-item {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: var(--box-width);
+  height: var(--box-height);
+  margin-left: calc(var(--box-width) / -2);
+  transform-style: preserve-3d;
+  transform:
+    translateX(calc(var(--side) * (var(--box-width) * 1.3 + (var(--dist) - 1) * var(--box-width) * 0.34)))
+    translateZ(calc(min(var(--dist), 1) * -170px - var(--dist) * 4px))
+    rotateY(calc(var(--side) * -40deg));
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cf-item.selected {
+  --base-turn: 7deg; /* légère rotation pour laisser voir la tranche */
 }
 
 .shelf-empty {
@@ -181,41 +255,106 @@ kbd {
   color: var(--text);
 }
 
-/* ---------- Boîte de jeu (3D légère) ---------- */
+/* ---------- Boîte de jeu (3D) ---------- */
 
 .box-wrap {
-  position: relative;
-  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
-  perspective: 1100px; /* distance de la "caméra" : plus petit = 3D plus marquée */
-  margin-bottom: 18px;
+  transform-style: preserve-3d;
+  transform-origin: 50% 100%; /* on grandit depuis le sol */
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Apparition en cascade au lancement de l'appli */
+  animation: box-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--dist) * 45ms);
 }
 
+.cf-item.selected .box-wrap {
+  transform: scale(var(--focus-scale));
+}
+
+.cf-item.selected .box-wrap:active {
+  transform: scale(calc(var(--focus-scale) * 0.97));
+}
+
+@keyframes box-enter {
+  from {
+    transform: translateY(60px) rotateX(-12deg);
+  }
+}
+
+/* Enveloppe : fait flotter la boîte du centre, soulève les autres au survol */
+.box-float {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cf-item.selected .box-float {
+  animation: box-float 5s ease-in-out infinite;
+}
+
+.cf-item:not(.selected) .box-wrap:hover .box-float {
+  transform: translateY(-12px);
+}
+
+@keyframes box-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* La boîte elle-même : pivote pour suivre la souris (variables --tilt-x / --tilt-y) */
 .box {
   position: relative;
-  width: var(--box-width);
-  height: calc(var(--box-width) * 1.5); /* format 600x900 */
+  width: 100%;
+  height: 100%;
   transform-style: preserve-3d;
-  transform: rotateY(20deg); /* légère inclinaison pour voir la tranche */
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(calc(var(--base-turn, 0deg) + var(--tilt-y, 0deg)));
+  /* Retour en douceur avec un petit rebond quand la souris s'en va */
+  transition: transform 0.8s cubic-bezier(0.23, 1.3, 0.32, 1);
 }
 
-.box-wrap.selected .box {
-  transform: rotateY(32deg) translateY(-12px) translateZ(30px) scale(1.06);
+/* Pendant que la souris bouge : on suit le curseur de près */
+.tilting .box {
+  transition: transform 0.12s ease-out;
 }
 
-/* Face avant (la jaquette), avancée de l'épaisseur de la boîte */
+/* Face avant : la jaquette dans un boîtier sombre, avancée de l'épaisseur de la boîte */
 .box-front {
   position: absolute;
   inset: 0;
   transform: translateZ(var(--box-depth));
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
-  background: #222;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  padding: 3px 3px 3px 6px; /* bord du boîtier, plus large côté charnière */
+  background: linear-gradient(145deg, #2a2f3a, #0b0d12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 18px 40px rgba(0, 0, 0, 0.6);
+  transition: box-shadow 0.6s;
+}
+
+/* Charnière du boîtier, le long du bord gauche */
+.box-front::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.5));
+  pointer-events: none;
 }
 
 .box-front img {
@@ -223,19 +362,113 @@ kbd {
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: 2px;
 }
 
-/* Reflet brillant sur le plastique de la boîte */
+/* Lumière bleutée sur les bords de la boîte du centre */
+.cf-item.selected .box-front {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 0 0 1px rgba(150, 190, 255, 0.35),
+    0 0 50px rgba(90, 150, 255, 0.35),
+    0 30px 60px rgba(0, 0, 0, 0.7);
+}
+
+/* Reflet fixe sur le plastique du boîtier */
 .box-shine {
   position: absolute;
   inset: 0;
-  background: linear-gradient(115deg, rgba(255, 255, 255, 0.18) 0%, transparent 35%, transparent 70%, rgba(255, 255, 255, 0.06));
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.05) 22%,
+    transparent 38%,
+    transparent 70%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
   pointer-events: none;
+}
+
+/* Éclat de brillance qui balaie la jaquette du centre de temps en temps */
+.box-sheen {
+  position: absolute;
+  inset: -50%;
+  background: linear-gradient(
+    105deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.32) 50%,
+    transparent 58%
+  );
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cf-item.selected .box-sheen {
+  animation: box-sheen 4.5s ease-in-out 0.6s infinite;
+}
+
+@keyframes box-sheen {
+  0% {
+    transform: translateX(-70%);
+    opacity: 1;
+  }
+  35% {
+    transform: translateX(70%);
+    opacity: 1;
+  }
+  36%,
+  100% {
+    transform: translateX(70%);
+    opacity: 0;
+  }
+}
+
+/* Reflet lumineux qui suit la souris (variables --glare-x / --glare-y) */
+.box-glare {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--glare-x, 30%) var(--glare-y, 15%),
+    rgba(255, 255, 255, 0.5),
+    rgba(255, 255, 255, 0.08) 30%,
+    transparent 60%
+  );
+  mix-blend-mode: overlay;
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+.cf-item.selected .box-glare {
+  opacity: 0.45;
+}
+
+.tilting .box-glare {
+  opacity: 1;
+}
+
+/* Voile sombre : plus une boîte est loin du centre, plus elle est sombre */
+.box-shade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: min(calc(var(--dist) * 0.035 + 0.12), 0.6);
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+
+.cf-item.selected .box-shade {
+  opacity: 0;
+}
+
+.cf-item:not(.selected) .box-wrap:hover .box-shade {
+  opacity: 0.02;
 }
 
 /* Badge "NOUVEAU" : coin en haut à droite de la jaquette (jeux ajoutés il y a moins de 24 h) */
 .box-badge-new {
   position: absolute;
+  z-index: 3;
   top: 8px;
   right: 8px;
   padding: 3px 7px;
@@ -258,24 +491,55 @@ kbd {
   height: 100%;
   transform-origin: left center;
   transform: rotateY(-90deg);
-  background: linear-gradient(90deg, hsl(var(--hue), 35%, 12%), hsl(var(--hue), 40%, 22%));
+  background: linear-gradient(90deg, #07090d, #1d222c 45%, #0e1117);
+  border-left: 2px solid hsla(var(--hue), 60%, 55%, 0.45); /* petite touche de couleur propre au jeu */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
 }
 
+/* Tranche de droite : même chose, de l'autre côté (visible sur les boîtes de droite) */
+.box-spine-right {
+  left: auto;
+  right: 0;
+  transform-origin: right center;
+  transform: rotateY(90deg);
+}
+
 .box-spine span {
   writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.78);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-height: 90%;
+  max-height: 86%;
+}
+
+/* Dessus et dessous du boîtier (visibles quand la boîte pivote vers le haut ou le bas) */
+.box-top,
+.box-bottom {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: var(--box-depth);
+  background: linear-gradient(#2b313c, #12151b);
+}
+
+.box-top {
+  top: 0;
+  transform-origin: top center;
+  transform: rotateX(90deg);
+}
+
+.box-bottom {
+  bottom: 0;
+  transform-origin: bottom center;
+  transform: rotateX(-90deg);
 }
 
 /* Boîte générique (pas de jaquette) */
@@ -285,6 +549,7 @@ kbd {
   display: flex;
   align-items: flex-end;
   padding: 16px;
+  border-radius: 2px;
   background:
     radial-gradient(circle at 30% 20%, hsla(var(--hue), 80%, 60%, 0.5), transparent 60%),
     linear-gradient(160deg, hsl(var(--hue), 50%, 25%), hsl(calc(var(--hue) + 40), 50%, 10%));
@@ -300,43 +565,73 @@ kbd {
   word-break: break-word;
 }
 
-/* Halo autour de la boîte sélectionnée */
-.box-wrap.selected .box-front {
-  box-shadow:
-    0 0 0 3px var(--accent),
-    0 0 40px rgba(79, 140, 255, 0.55),
-    0 20px 40px rgba(0, 0, 0, 0.6);
+/* Lueur aux couleurs de la jaquette, derrière la boîte du centre */
+.box-ambient {
+  position: absolute;
+  inset: 8% 4% 0;
+  transform: translateZ(-60px) scale(1.05);
+  filter: blur(34px) saturate(1.7);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.8s,
+    visibility 0.8s;
+  pointer-events: none;
 }
 
-.box-label {
-  position: relative;
-  z-index: 1;
-  max-width: calc(var(--box-width) + 40px);
-  font-size: 13px;
-  color: var(--muted);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 14px;
+.box-ambient img,
+.box-ambient-color {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-/* ---------- Barre du bas (jeu sélectionné) ---------- */
+.box-ambient-color {
+  background: hsl(var(--hue), 70%, 45%);
+}
+
+.cf-item.selected .box-ambient {
+  opacity: 0.6;
+  visibility: visible;
+}
+
+/* Moins d'animations si Windows est réglé sur "réduire les animations" */
+@media (prefers-reduced-motion: reduce) {
+  .box-wrap,
+  .box-float,
+  .box-sheen {
+    animation: none !important;
+  }
+  .cf-item,
+  .box {
+    transition-duration: 0.01s;
+  }
+}
+
+/* ---------- Infos du jeu sélectionné (sous le carrousel, par-dessus le reflet) ---------- */
 
 .details {
+  position: relative;
+  z-index: 5;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding: 14px 28px;
-  background: rgba(13, 15, 20, 0.85);
-  border-top: 1px solid var(--border);
+  gap: 12px;
+  padding: 0 28px 22px;
+  margin-top: calc(var(--box-height) * -0.3);
+  text-align: center;
 }
 
 .details-title {
-  font-size: 22px;
-  font-weight: 700;
-  min-width: 200px;
+  font-size: clamp(28px, 4.4vh, 48px);
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.9);
+}
+
+.details .hint {
+  font-size: 13px;
+  margin-top: 4px;
 }
 
 .details-actions {
@@ -345,9 +640,9 @@ kbd {
 }
 
 .details-help {
-  margin-left: auto;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 /* ---------- Superpositions ---------- */
@@ -361,7 +656,8 @@ kbd {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: rgba(8, 10, 14, 0.88);
+  background: rgba(3, 5, 9, 0.9);
+  backdrop-filter: blur(8px);
   font-size: 22px;
   z-index: 20;
 }
@@ -376,11 +672,12 @@ kbd {
   bottom: 90px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--panel);
+  background: rgba(22, 27, 39, 0.92);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-left: 4px solid var(--success);
   padding: 10px 18px;
-  border-radius: 8px;
+  border-radius: 10px;
   z-index: 40;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
@@ -409,6 +706,7 @@ kbd {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
