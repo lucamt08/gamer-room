@@ -43,6 +43,11 @@ export interface Game {
   gameFolder?: string | null
   /** Numéro du jeu chez Steam (jeux Steam uniquement). */
   steamAppId?: number | null
+  /**
+   * Launcher : lancer directement le vrai .exe du jeu, sans ouvrir le launcher ?
+   * Absent = choix automatique (voir shouldSkipLauncher dans shared/launch.ts).
+   */
+  skipLauncher?: boolean
 }
 
 export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam'
@@ -58,7 +63,7 @@ export interface SteamGameEntry {
 }
 
 /** Les champs qu'on peut modifier depuis l'écran "Modifier". */
-export type GamePatch = Partial<Pick<Game, 'name' | 'args' | 'forceFullscreen'>>
+export type GamePatch = Partial<Pick<Game, 'name' | 'args' | 'forceFullscreen' | 'skipLauncher'>>
 
 /** Paramètres de l'application (stockés localement, jamais dans le dépôt Git). */
 export interface Settings {

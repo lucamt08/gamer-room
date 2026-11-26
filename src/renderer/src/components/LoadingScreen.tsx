@@ -1,6 +1,7 @@
 // Écran de chargement affiché entre le clic sur "Jouer" et l'ouverture du jeu en plein écran.
 // Pendant ce temps, le hub démarre le jeu (ou son launcher / Steam) et attend la fenêtre du jeu.
 import type { Game, RunningState } from '@shared/types'
+import { shouldSkipLauncher } from '@shared/launch'
 
 interface Props {
   game: Game | undefined
@@ -12,7 +13,7 @@ interface Props {
 function phaseText(game: Game | undefined, phase: RunningState['phase']): string {
   if (phase === 'launcher') return 'Le launcher est ouvert : clique sur « Jouer » pour démarrer le jeu'
   if (game?.launchKind === 'steam') return 'Steam démarre le jeu…'
-  if (game?.launchKind === 'launcher') return 'Ouverture du launcher…'
+  if (game?.launchKind === 'launcher' && !shouldSkipLauncher(game)) return 'Ouverture du launcher…'
   return 'Lancement du jeu…'
 }
 

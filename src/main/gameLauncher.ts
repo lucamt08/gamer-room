@@ -2,7 +2,9 @@
 //
 // Déroulé quand on lance un jeu :
 //  1. on note les fenêtres déjà ouvertes (pour reconnaître la "nouvelle" fenêtre du jeu) ;
-//  2. on démarre le .exe (le jeu, son launcher, son relais, ou Steam) ;
+//  2. on démarre le .exe (le jeu, son relais, ou Steam). Pour un launcher dont on connaît le vrai jeu,
+//     on lance DIRECTEMENT le vrai .exe (pas de clic sur "Jouer") ; si le jeu refuse de démarrer
+//     sans son launcher, on ouvre le launcher et on s'en souvient (voir fallbackToLauncher) ;
 //  3. le hub RESTE affiché avec l'écran de chargement (phase 'starting') ;
 //  4. toutes les 0,5 s, on cherche :
 //     - la fenêtre d'un launcher → on la met devant l'écran de chargement pour qu'on clique
@@ -19,12 +21,14 @@
 //
 // Le raccourci global (Ctrl+Alt+F4 par défaut) appelle killRunningGame().
 
-import { spawn, execFile } from 'node:child_process'
+import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import type { Game, RunningState } from '@shared/types'
+import { shouldSkipLauncher } from '@shared/launch'
 import * as wm from './windowManager'
-import { ensureLaunchInfo } from './library'
+import { ensureLaunchInfo, updateGame } from './library'
 import { fixNameIfFromLauncher, learnFromGameWindow, samePath } from './launchLearning'
 
 // Réglages du suivi (en millisecondes)
@@ -35,12 +39,15 @@ const WINDOW_STABLE_DELAY = 5_000 // une fois en plein écran, on surveille enco
 const PROCESS_CHECK_INTERVAL = 1_000 // on vérifie que le jeu tourne toutes les secondes
 const MIN_LOADING_TIME = 1_500 // l'écran de chargement reste au moins 1,5 s (évite un clignotement)
 const LAUNCHER_CLOSED_DELAY = 15 // launcher fermé sans lancer le jeu : on abandonne après 15 s
+const FALLBACK_WINDOW = 30_000 // launcher sauté : si le jeu se ferme dans les 30 s sans fenêtre, on ouvre le launcher
 
 type Phase = NonNullable<RunningState['phase']>
 
 /** Tout ce qu'on sait sur le jeu en cours. */
 interface Session {
   game: Game
+  /** On a lancé directement le vrai .exe, sans le launcher ? */
+  skippedLauncher: boolean
   /** Pid du processus qu'on a lancé nous-mêmes. */
   rootPid: number
   /** Tous les pids "du lancement" qu'on a vus vivants (launcher, enfants…). */
@@ -119,13 +126,9 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
     // 1. Fenêtres déjà présentes
     const windowsBeforeLaunch = new Set(wm.listAllWindowHandles())
 
-    // 2. Démarrage du jeu
-    //    detached + unref : le jeu vit sa vie, même si le hub plante.
-    const child = spawn(game.exePath, parseArgs(game.args), {
-      cwd: existsSync(game.workingDir) ? game.workingDir : undefined,
-      detached: true,
-      stdio: 'ignore'
-    })
+    // 2. Démarrage du jeu : directement le vrai .exe si on saute le launcher (Cyberpunk), sinon le .exe ajouté
+    const skip = shouldSkipLauncher(game) && existsSync(game.realExePath!)
+    const child = skip ? startProcess(game.realExePath!, '', dirname(game.realExePath!)) : startProcess(game.exePath, game.args, game.workingDir)
 
     child.once('error', (error) => {
       endSession('Erreur au lancement')
@@ -133,11 +136,13 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
     })
 
     child.once('spawn', () => {
-      child.unref()
       const pid = child.pid!
-      console.log(`[launcher] "${game.name}" démarré (pid ${pid}, type : ${game.launchKind})`)
+      console.log(
+        `[launcher] "${game.name}" démarré (pid ${pid}, type : ${game.launchKind}${skip ? ', launcher sauté' : ''})`
+      )
 
       const s: Session = {
+        skippedLauncher: skip,
         game,
         rootPid: pid,
         knownPids: new Set([pid]),
@@ -172,6 +177,39 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
       startProcessWatch(s)
       resolve()
     })
+  })
+}
+
+/**
+ * Démarre un programme.
+ * detached + unref : le jeu vit sa vie, même si le hub plante.
+ */
+function startProcess(exe: string, args: string, cwd: string): ChildProcess {
+  const child = spawn(exe, parseArgs(args), {
+    cwd: existsSync(cwd) ? cwd : undefined,
+    detached: true,
+    stdio: 'ignore'
+  })
+  child.once('spawn', () => child.unref())
+  return child
+}
+
+/**
+ * Le vrai .exe lancé directement s'est fermé tout de suite sans ouvrir de fenêtre :
+ * ce jeu a besoin de son launcher. On ouvre le launcher, et on s'en souvient pour la prochaine fois.
+ */
+function fallbackToLauncher(s: Session): void {
+  console.log(`[launcher] "${s.game.name}" refuse de démarrer sans son launcher : on ouvre le launcher`)
+  s.skippedLauncher = false
+  s.game = updateGame(s.game.id, { skipLauncher: false })
+  const child = startProcess(s.game.exePath, s.game.args, s.game.workingDir)
+  child.once('error', () => endSession('Impossible d\'ouvrir le launcher'))
+  child.once('spawn', () => {
+    if (session !== s) return
+    s.rootPid = child.pid!
+    s.knownPids.add(child.pid!)
+    s.phase = 'starting'
+    sendState(s, { game: s.game, message: 'Ce jeu a besoin de son launcher : ouverture du launcher' })
   })
 }
 
@@ -387,6 +425,14 @@ function startProcessWatch(s: Session): void {
     }
 
     deadChecks = alive ? 0 : deadChecks + 1
+
+    // Launcher sauté, mais le jeu s'est fermé en moins de 30 s sans fenêtre : on repasse par le launcher
+    if (s.skippedLauncher && !s.gameWindow && deadChecks >= 3 && Date.now() - s.startedAt < FALLBACK_WINDOW) {
+      deadChecks = 0
+      fallbackToLauncher(s)
+      return
+    }
+
     const launcherGaveUp = s.game.launchKind === 'launcher' && !s.gameWindow && deadChecks >= LAUNCHER_CLOSED_DELAY
     if ((deadChecks >= 2 && (s.searchDone || s.gameWindow)) || launcherGaveUp) {
       console.log(`[launcher] "${s.game.name}" fermé`)

@@ -1,6 +1,7 @@
 // Écran "Modifier" : nom, arguments, option plein écran, suppression.
 import { forwardRef, useState } from 'react'
 import type { Game } from '@shared/types'
+import { canSkipLauncher, shouldSkipLauncher } from '@shared/launch'
 import Modal from './Modal'
 
 interface Props {
@@ -18,12 +19,15 @@ const GameEditor = forwardRef<HTMLDivElement, Props>(function GameEditor(
   const [name, setName] = useState(game.name)
   const [args, setArgs] = useState(game.args)
   const [forceFullscreen, setForceFullscreen] = useState(game.forceFullscreen)
+  const [skipLauncher, setSkipLauncher] = useState(shouldSkipLauncher(game))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const save = async (): Promise<void> => {
     try {
-      onSaved(await window.api.updateGame(game.id, { name, args, forceFullscreen }))
+      // L'option "sauter le launcher" n'est envoyée que pour les launchers dont on connaît le vrai jeu
+      const patch = canSkipLauncher(game) ? { name, args, forceFullscreen, skipLauncher } : { name, args, forceFullscreen }
+      onSaved(await window.api.updateGame(game.id, patch))
     } catch (e) {
       setError((e as Error).message)
     }
@@ -59,6 +63,12 @@ const GameEditor = forwardRef<HTMLDivElement, Props>(function GameEditor(
           <input type="checkbox" checked={forceFullscreen} onChange={(e) => setForceFullscreen(e.target.checked)} />
           Forcer le plein écran sans bordure au lancement
         </label>
+        {canSkipLauncher(game) && (
+          <label className="checkbox">
+            <input type="checkbox" checked={skipLauncher} onChange={(e) => setSkipLauncher(e.target.checked)} />
+            Lancer le jeu directement, sans ouvrir son launcher
+          </label>
+        )}
         <p className="hint path" title={game.exePath}>
           {game.exePath}
         </p>
