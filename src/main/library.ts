@@ -8,6 +8,7 @@ import { shell } from 'electron'
 import type { Game, GamePatch } from '@shared/types'
 import { readJson, writeJson } from './jsonStore'
 import { coverPath } from './covers'
+import { readExeInfo } from './exeInfo'
 
 const FILE = 'library.json'
 
@@ -89,7 +90,9 @@ export function addGameFromPath(path: string): Game {
     steamGridDbId: null,
     forceFullscreen: true,
     addedAt: new Date().toISOString(),
-    lastPlayedAt: null
+    lastPlayedAt: null,
+    // Éditeur lu dans la carte d'identité du .exe (pour la future fiche d'infos du jeu)
+    publisher: readExeInfo(exePath).publisher
   }
   load().push(game)
   save()

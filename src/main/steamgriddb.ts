@@ -9,7 +9,8 @@ import type { AutoCoverResult, Game, SgdbGame, SgdbGrid, SgdbSearchResult } from
 import { getSettings } from './settings'
 import { downloadCover, coverPath } from './covers'
 import { getGame, updateGame } from './library'
-import { isSameName, nameVariants, rankBySimilarity } from './gameNames'
+import { fallbackNames, isGenericName, isSameName, nameVariants, rankBySimilarity } from './gameNames'
+import { readExeInfo } from './exeInfo'
 import { rmSync } from 'node:fs'
 
 const API = 'https://www.steamgriddb.com/api/v2'
@@ -78,35 +79,63 @@ export async function setCover(gameId: string, gridUrl: string, sgdbGameId: numb
 }
 
 /**
- * Recherche automatique après l'ajout d'un jeu (avec correction du nom si besoin) :
- *  - le même nom, à la mise en forme près ("HorizonForbiddenWest" = "Horizon Forbidden West"),
- *    ou un seul résultat pour le nom exact → on applique directement sa première jaquette,
- *    et on renomme le jeu avec son nom officiel s'il était écrit autrement ;
- *  - plusieurs résultats possibles → on renvoie la liste, l'interface demande à l'utilisateur ;
- *  - aucun résultat / pas de clé → la boîte générique reste affichée.
+ * Cherche le jeu correspondant à UN nom.
+ * `match` = le jeu trouvé avec certitude (même nom à la mise en forme près, ou un seul résultat
+ * pour le nom exact), sinon null ; `results` = tous les jeux trouvés.
+ */
+async function findMatch(name: string): Promise<{ match: SgdbGame | null; results: SgdbGame[] }> {
+  const { results, correctedTerm } = await smartSearch(name)
+  const exact = results.filter((r) => isSameName(r.name, name))
+  // Un seul résultat ne suffit que si le nom n'a pas été corrigé (sinon on laisse l'utilisateur vérifier)
+  const match = exact.length === 1 ? exact[0] : !correctedTerm && results.length === 1 ? results[0] : null
+  return { match, results }
+}
+
+/**
+ * Recherche automatique de jaquette, lancée juste après l'ajout d'un jeu :
+ *  1. on lit la carte d'identité du .exe (nom du produit, éditeur) et on garde l'éditeur ;
+ *  2. on cherche avec le nom du jeu, SAUF s'il ne veut rien dire ("launcher", "game"...) ;
+ *  3. si ce nom est introuvable, on essaie les autres noms possibles : nom du produit écrit
+ *     dans le .exe, puis nom du dossier (voir fallbackNames dans gameNames.ts) ;
+ *  4. dès qu'un jeu est trouvé avec certitude → on applique sa première jaquette et on renomme
+ *     le jeu avec son nom officiel ("launcher" devient "The Last of Us Part I") ;
+ *  5. sinon, plusieurs résultats possibles → on renvoie la liste, l'interface demande à l'utilisateur ;
+ *     aucun résultat / pas de clé → la boîte générique reste affichée.
  */
 export async function autoCover(gameId: string): Promise<AutoCoverResult> {
   const game = getGame(gameId)
   if (!game) return { status: 'error', message: 'Jeu introuvable.' }
+
+  // L'éditeur servira plus tard (fiche d'infos du jeu). Les jeux ajoutés avant cette version ne l'ont pas encore.
+  const info = readExeInfo(game.exePath)
+  if (info.publisher && !game.publisher) updateGame(gameId, { publisher: info.publisher })
+
   if (!getSettings().steamGridDbApiKey.trim()) return { status: 'no-key' }
 
+  const others = fallbackNames(game.exePath, info).filter((name) => !isSameName(name, game.name))
+  const candidates = isGenericName(game.name) ? others : [game.name, ...others]
+
   try {
-    const { results, correctedTerm } = await smartSearch(game.name)
-    if (results.length === 0) return { status: 'none' }
+    let firstResults: SgdbGame[] = []
+    for (const name of candidates) {
+      const { match, results } = await findMatch(name)
+      if (!match) {
+        if (firstResults.length === 0) firstResults = results
+        continue
+      }
 
-    const exact = results.filter((r) => isSameName(r.name, game.name))
-    // Un seul résultat ne suffit que si le nom n'a pas été corrigé (sinon on laisse l'utilisateur vérifier)
-    const match = exact.length === 1 ? exact[0] : !correctedTerm && results.length === 1 ? results[0] : null
-    if (!match) return { status: 'multiple', results }
-
-    const grids = await getGrids(match.id)
-    if (grids.length === 0) return { status: 'none' }
-    let updated = await setCover(gameId, grids[0].url, match.id)
-    // Nom officiel : "HorizonForbiddenWest" devient "Horizon Forbidden West"
-    if (match.name !== game.name && isSameName(match.name, game.name)) {
-      updated = updateGame(gameId, { name: match.name })
+      const grids = await getGrids(match.id)
+      if (grids.length === 0) continue
+      let updated = await setCover(gameId, grids[0].url, match.id)
+      // Nom officiel : "HorizonForbiddenWest" devient "Horizon Forbidden West",
+      // et un nom trouvé autrement ("launcher" → "The Last of Us Part I") remplace l'ancien.
+      const foundElsewhere = name !== game.name
+      if (match.name !== game.name && (foundElsewhere || isSameName(match.name, game.name))) {
+        updated = updateGame(gameId, { name: match.name })
+      }
+      return { status: 'applied', game: updated }
     }
-    return { status: 'applied', game: updated }
+    return firstResults.length > 0 ? { status: 'multiple', results: firstResults } : { status: 'none' }
   } catch (error) {
     return { status: 'error', message: (error as Error).message }
   }

@@ -5,7 +5,11 @@
 // Ce fichier n'a aucune dépendance (pas d'Electron, pas de réseau) :
 //  - nameVariants()     propose des orthographes "nettoyées" à essayer l'une après l'autre ;
 //  - rankBySimilarity() trie les jeux trouvés du plus ressemblant au moins ressemblant ;
-//  - isSameName()       dit si deux noms désignent le même jeu à la mise en forme près.
+//  - isSameName()       dit si deux noms désignent le même jeu à la mise en forme près ;
+//  - isGenericName()    repère les noms qui ne veulent rien dire ("launcher", "game", "start"...) ;
+//  - fallbackNames()    propose d'autres noms possibles (carte d'identité du .exe, noms de dossiers).
+
+import { basename, dirname } from 'node:path'
 
 /** Nombre maximum d'orthographes de secours essayées (= nombre maximum d'appels à l'API). */
 const MAX_VARIANTS = 8
@@ -236,6 +240,58 @@ export function nameSimilarity(typed: string, gameName: string): number {
 function removeEditionWordsFromList(words: string[]): string[] {
   const kept = words.filter((word) => !EDITION_WORDS.includes(word))
   return kept.length > 0 ? kept : words
+}
+
+/** Mots qui, seuls, ne disent pas de quel jeu il s'agit ("launcher.exe", "game.exe", "start.exe"...). */
+const GENERIC_WORDS = [
+  'game', 'games', 'jeu', 'jeux', 'start', 'play', 'run', 'main', 'app', 'application', 'release',
+  'build', 'content', 'common', 'steamapps', 'program', 'programs', 'files', 'local', 'appdata',
+  'users', 'xboxgames', 'galaxy', 'engine', 'win'
+]
+
+/** Noms de produit qui ne sont pas des jeux : Windows lui-même, moteurs de jeu, lanceurs techniques. */
+const NOT_A_GAME = /\b(microsoft|windows|operating system|unreal|unity|bootstrap|electron|java|python)\b/i
+
+/** Vrai si un nom ne veut rien dire tout seul : "launcher", "Game_x64", "start"... */
+export function isGenericName(name: string): boolean {
+  const meaningful = normalizeName(name)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 3 && !NOISE_WORDS.includes(word) && !GENERIC_WORDS.includes(word))
+  return meaningful.length === 0
+}
+
+/**
+ * Autres noms possibles pour un jeu, du plus fiable au moins fiable :
+ *  1. le nom du produit écrit dans le .exe par l'éditeur ("The Last of Us™ Part I") ;
+ *  2. la description du .exe ;
+ *  3. le nom du premier dossier parlant au-dessus du .exe
+ *     (D:\jeux\The Last of Us - Part I\bin\x64\launcher.exe → "The Last of Us - Part I").
+ * Les noms vides, génériques ou qui ne sont pas des jeux sont ignorés, ainsi que les doublons.
+ */
+export function fallbackNames(exePath: string, info: { productName: string | null; fileDescription: string | null }): string[] {
+  const names: string[] = []
+  const add = (candidate: string | null): void => {
+    const clean = candidate ? normalizeName(candidate) : ''
+    if (!clean || isGenericName(clean) || NOT_A_GAME.test(clean)) return
+    if (names.some((name) => isSameName(name, clean))) return
+    names.push(clean)
+  }
+
+  add(info.productName)
+  add(info.fileDescription)
+
+  // On remonte au maximum 4 dossiers, en sautant "bin", "x64", "Binaries", "Win64"...
+  let folder = dirname(exePath)
+  for (let level = 0; level < 4 && dirname(folder) !== folder; level++) {
+    const folderName = basename(folder)
+    if (!isGenericName(folderName)) {
+      add(folderName)
+      break
+    }
+    folder = dirname(folder)
+  }
+  return names
 }
 
 /** Trie des jeux trouvés du plus ressemblant au moins ressemblant à ce qui a été tapé. */

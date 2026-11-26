@@ -23,6 +23,11 @@ export interface Game {
   addedAt: string
   /** Dernière fois que le jeu a été lancé (format ISO), ou null. */
   lastPlayedAt: string | null
+  /**
+   * Éditeur lu dans le .exe (ex. "Sony Interactive Entertainment"), ou null si inconnu.
+   * Absent pour les jeux ajoutés avant cette version (rempli à la prochaine recherche de jaquette).
+   */
+  publisher?: string | null
 }
 
 /** Les champs qu'on peut modifier depuis l'écran "Modifier". */
