@@ -12,6 +12,7 @@ import { findSteamExe, listSteamGames } from './steamLibrary'
 import { registerKillShortcut } from './shortcuts'
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater'
 import { applyBackgroundMode } from './background'
+import * as fws from './flawless'
 
 /** La fenêtre qui a fait la demande (le hub). */
 function windowOf(event: IpcMainInvokeEvent): BrowserWindow {
@@ -36,7 +37,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.addGame, (_event, path: string) => library.addGameFromPath(path))
   ipcMain.handle(IPC.updateGame, (_event, id: string, patch: GamePatch) => {
     // On ne laisse passer que les champs modifiables depuis l'interface
-    const { name, args, forceFullscreen, skipLauncher, playtimeSeconds } = patch
+    const { name, args, forceFullscreen, skipLauncher, playtimeSeconds, fwsModule } = patch
     const safe: GamePatch = {}
     if (typeof name === 'string' && name.trim()) safe.name = name.trim()
     if (typeof args === 'string') safe.args = args
@@ -46,6 +47,8 @@ export function registerIpcHandlers(): void {
     if (typeof playtimeSeconds === 'number' && Number.isFinite(playtimeSeconds)) {
       safe.playtimeSeconds = Math.max(0, Math.round(playtimeSeconds))
     }
+    // Correctif Flawless Widescreen : 'auto', 'off' ou la clé d'un correctif ("plugin/module")
+    if (typeof fwsModule === 'string' && /^(auto|off|[\w.-]+\/[\w.-]+)$/.test(fwsModule)) safe.fwsModule = fwsModule
     return library.updateGame(id, safe)
   })
   ipcMain.handle(IPC.removeGame, (_event, id: string) => library.removeGame(id))
@@ -109,6 +112,32 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.checkUpdate, () => checkForUpdates())
   ipcMain.handle(IPC.downloadUpdate, () => downloadUpdate())
   ipcMain.handle(IPC.installUpdate, () => installUpdate())
+
+  // --- Flawless Widescreen ---
+  ipcMain.handle(IPC.fwsGameInfo, (_event, gameId: string) => {
+    const game = library.getGame(gameId)
+    if (!game) throw new Error('Jeu introuvable.')
+    return fws.getGameInfo(game)
+  })
+  ipcMain.handle(IPC.fwsStatus, () => fws.getStatus())
+  // Crée les tâches administrateur : Windows affiche sa fenêtre d'autorisation (une seule fois)
+  ipcMain.handle(IPC.fwsAuthorize, async () => {
+    await fws.authorize()
+    return fws.getStatus()
+  })
+  // Choisir le dossier de Flawless Widescreen à la main (s'il n'a pas été trouvé tout seul)
+  ipcMain.handle(IPC.fwsPickFolder, async (event) => {
+    const result = await dialog.showOpenDialog(windowOf(event), {
+      title: 'Où est installé Flawless Widescreen ?',
+      properties: ['openDirectory']
+    })
+    if (result.canceled) return fws.getStatus()
+    const folder = fws.isValidFwsChoice(result.filePaths[0])
+    if (!folder) throw new Error('FlawlessWidescreen.exe est introuvable dans ce dossier.')
+    saveSettings({ fwsPath: folder })
+    fws.forgetFwsFolder()
+    return fws.getStatus()
+  })
 
   ipcMain.handle(IPC.getVersion, () => app.getVersion())
 }

@@ -1,6 +1,7 @@
 // Lancement d'un jeu + suivi de son exécution.
 //
 // Déroulé quand on lance un jeu :
+//  0. si le jeu a un correctif Flawless Widescreen : on démarre FWS avec le correctif activé (flawless.ts) ;
 //  1. on note les fenêtres déjà ouvertes (pour reconnaître la "nouvelle" fenêtre du jeu) ;
 //  2. on démarre le .exe (le jeu, son relais, ou Steam). Pour un launcher dont on connaît le vrai jeu,
 //     on lance DIRECTEMENT le vrai .exe (pas de clic sur "Jouer") ; si le jeu refuse de démarrer
@@ -31,6 +32,7 @@ import { ensureLaunchInfo, updateGame } from './library'
 import { removeRunAsAdmin } from './compatFlags'
 import { fixNameIfFromLauncher, isInside, learnFromGameWindow, samePath } from './launchLearning'
 import { getHub } from './hub'
+import { prepareForGame } from './flawless'
 
 // Réglages du suivi (en millisecondes)
 const SEARCH_TIMEOUT = 30_000 // jeu "normal" : on cherche la fenêtre pendant 30 s max
@@ -71,6 +73,8 @@ interface Session {
 }
 
 let session: Session | null = null
+/** Préparation avant le jeu (Flawless Widescreen) : le jeu n'est pas encore lancé. */
+let preparing: { cancelled: boolean } | null = null
 let notify: (state: RunningState) => void = () => {}
 
 /** À appeler une fois au démarrage : on donne une fonction pour prévenir l'interface. */
@@ -79,7 +83,7 @@ export function initGameLauncher(onState: (state: RunningState) => void): void {
 }
 
 export function isGameRunning(): boolean {
-  return session !== null
+  return session !== null || preparing !== null
 }
 
 /**
@@ -106,8 +110,33 @@ function sendState(s: Session, extra: Partial<RunningState> = {}): void {
   notify({ running: true, gameId: s.game.id, phase: s.phase, ...extra })
 }
 
-/** Lance un jeu. Renvoie une promesse qui se résout dès que le processus a démarré. */
-export function launchGame(gameToLaunch: Game): Promise<void> {
+/**
+ * Lance un jeu. Renvoie une promesse qui se résout dès que le processus a démarré.
+ * Si le jeu a un correctif Flawless Widescreen, on démarre d'abord FWS avec le correctif activé
+ * (voir flawless.ts) ; en cas de souci, le jeu se lance quand même, sans correctif.
+ */
+export async function launchGame(gameToLaunch: Game): Promise<void> {
+  if (session || preparing) throw new Error('Un jeu est déjà en cours.')
+  const prep = { cancelled: false }
+  preparing = prep
+  let warning: string | null
+  try {
+    warning = await prepareForGame(
+      gameToLaunch,
+      // L'écran de chargement s'affiche déjà pendant la préparation de Flawless Widescreen
+      () => notify({ running: true, gameId: gameToLaunch.id, phase: 'flawless' }),
+      () => prep.cancelled
+    )
+  } finally {
+    preparing = null
+  }
+  if (prep.cancelled) return // « Annuler » cliqué pendant la préparation
+  await startGame(gameToLaunch)
+  if (warning && session) sendState(session, { message: warning })
+}
+
+/** Démarre le jeu lui-même (après la préparation éventuelle de Flawless Widescreen). */
+function startGame(gameToLaunch: Game): Promise<void> {
   return new Promise((resolve, reject) => {
     if (session) {
       reject(new Error('Un jeu est déjà en cours.'))
@@ -139,7 +168,7 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
       // seulement (si on retire l'option "Exécuter en tant qu'administrateur", le lancement direct remarchera).
       if (skip && (error as NodeJS.ErrnoException).code === 'EACCES') {
         console.warn(`[launcher] ${game.realExePath} demande les droits administrateur : on passe par le launcher`)
-        launchGame({ ...game, skipLauncher: false }).then(resolve, reject)
+        startGame({ ...game, skipLauncher: false }).then(resolve, reject)
         return
       }
       endSession('Erreur au lancement')
@@ -466,6 +495,12 @@ function endSession(message?: string): void {
  * Pour un jeu Steam, on ne ferme jamais Steam lui-même : seulement le jeu.
  */
 export function killRunningGame(): void {
+  // Annulé pendant la préparation de Flawless Widescreen : le jeu ne sera pas lancé
+  if (preparing) {
+    preparing.cancelled = true
+    notify({ running: false, gameId: null, message: 'Lancement annulé' })
+    return
+  }
   const s = session
   if (!s) return
   console.log(`[launcher] Fermeture forcée de "${s.game.name}"`)

@@ -58,6 +58,13 @@ export interface Game {
    * Absent ou null = pas encore lu (on affiche alors le temps compté par Gamer Room).
    */
   steamPlaytimeMinutes?: number | null
+  /**
+   * Correctif Flawless Widescreen à activer au lancement (voir flawless.ts) :
+   *  - absent ou 'auto' : celui reconnu automatiquement (sauf jeux avec anti-cheat) ;
+   *  - 'off'            : jamais de correctif pour ce jeu ;
+   *  - sinon            : la clé d'un correctif choisi à la main, ex. "FWS_Plugins/Persona5Royal".
+   */
+  fwsModule?: string
 }
 
 export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam'
@@ -73,7 +80,7 @@ export interface SteamGameEntry {
 }
 
 /** Les champs qu'on peut modifier depuis l'écran "Modifier". */
-export type GamePatch = Partial<Pick<Game, 'name' | 'args' | 'forceFullscreen' | 'skipLauncher' | 'playtimeSeconds'>>
+export type GamePatch = Partial<Pick<Game, 'name' | 'args' | 'forceFullscreen' | 'skipLauncher' | 'playtimeSeconds' | 'fwsModule'>>
 
 /** Paramètres de l'application (stockés localement, jamais dans le dépôt Git). */
 export interface Settings {
@@ -89,6 +96,8 @@ export interface Settings {
    * au lieu de la quitter (voir background.ts).
    */
   trackOutsideApp: boolean
+  /** Dossier de Flawless Widescreen choisi à la main ('' = recherche automatique). */
+  fwsPath: string
 
   // --- Clavier / souris ---
   /** Molette : niveau de vitesse, de 1 (très lent) à 5 (très rapide) ; 3 = moyen (vitesse d'origine). */
@@ -157,9 +166,10 @@ export interface RunningState {
    * Étape du lancement (pour l'écran de chargement) :
    *  - 'starting' : le jeu (ou son launcher) démarre, on attend sa fenêtre ;
    *  - 'launcher' : la fenêtre d'un launcher est ouverte, il faut y cliquer sur "Jouer" ;
-   *  - 'playing'  : la fenêtre du jeu est là, le hub est caché.
+   *  - 'playing'  : la fenêtre du jeu est là, le hub est caché ;
+   *  - 'flawless' : avant le jeu, Gamer Room démarre Flawless Widescreen avec le correctif activé.
    */
-  phase?: 'starting' | 'launcher' | 'playing'
+  phase?: 'flawless' | 'starting' | 'launcher' | 'playing'
   /** Message court pour l'utilisateur (ex. "Plein écran appliqué"). */
   message?: string
   /** Le jeu à jour, quand le lancement a appris quelque chose (vrai .exe, nouveau nom, jaquette…). */
@@ -175,3 +185,39 @@ export type UpdateStatus =
   | { state: 'downloading'; percent: number }
   | { state: 'downloaded'; version: string }
   | { state: 'error'; message: string }
+
+/** Un correctif installé dans Flawless Widescreen (un "module", ex. Persona 5 Royal). */
+export interface FwsModule {
+  /** Identifiant unique : "<plugin>/<module>", ex. "FWS_Plugins/Persona5Royal". */
+  key: string
+  /** Nom du plugin, ex. "FWS_Plugins". */
+  plugin: string
+  /** Nom du module, ex. "Persona5Royal". */
+  module: string
+  /** Nom lisible, ex. "Persona 5 Royal". */
+  name: string
+  /** Noms des .exe du jeu (en minuscules), lus dans le script du correctif. Vide = n'importe quel .exe. */
+  exeNames: string[]
+  /** Le correctif prévient d'un anti-cheat (risque de bannissement) : jamais activé automatiquement. */
+  anticheat: boolean
+}
+
+/** État de Flawless Widescreen sur ce PC (pour les paramètres). */
+export interface FwsStatus {
+  /** Dossier d'installation trouvé, ou null. */
+  folder: string | null
+  /** L'autorisation administrateur "une seule fois" a-t-elle été donnée ? */
+  authorized: boolean
+  /** Nombre de correctifs installés. */
+  moduleCount: number
+}
+
+/** Ce que l'écran "Modifier" doit savoir sur Flawless Widescreen pour un jeu. */
+export interface FwsGameInfo {
+  /** Flawless Widescreen est-il installé ? (sinon on n'affiche rien) */
+  installed: boolean
+  /** Tous les correctifs installés, triés par nom. */
+  modules: FwsModule[]
+  /** Clé du correctif reconnu automatiquement pour ce jeu, ou null. */
+  detectedKey: string | null
+}

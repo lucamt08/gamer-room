@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   killShortcut: 'Ctrl+Alt+F4',
   startFullscreen: false,
   trackOutsideApp: true, // compter le temps de jeu même hors de Gamer Room (démarre avec Windows)
+  fwsPath: '', // dossier de Flawless Widescreen : '' = recherche automatique
   ...DEFAULT_SCROLL_SETTINGS // molette, glisser, manette (voir shared/scroll.ts)
 }
 

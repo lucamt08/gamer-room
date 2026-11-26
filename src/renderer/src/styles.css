@@ -862,7 +862,8 @@ kbd {
 input[type='text'],
 input[type='password'],
 input[type='number'],
-input:not([type]) {
+input:not([type]),
+select {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
