@@ -85,28 +85,43 @@ Les données de l'appli (bibliothèque, paramètres, jaquettes) sont dans `%APPD
 
 ## 🚀 Comment publier une nouvelle version
 
-C'est **GitHub** qui construit et publie l'installateur, pas ton PC. Il suffit de créer un **tag**.
+C'est **GitHub** qui construit et publie l'installateur, pas ton PC. Comme `main` est protégée
+(Pull Request obligatoire), ça se fait en deux temps : **changer le numéro de version via une PR**,
+puis **créer le tag** qui déclenche la publication.
 
-1. Assure-toi que `main` est à jour et que tout marche (`npm run dev`).
-2. Choisis le nouveau numéro de version ([semver](https://semver.org/lang/fr/)) :
+1. Choisis le nouveau numéro de version ([semver](https://semver.org/lang/fr/)) :
    - `0.1.0` → `0.1.1` pour une correction de bug,
    - `0.1.0` → `0.2.0` pour une nouvelle fonctionnalité.
-3. Dans un terminal, sur la branche `main` :
+
+2. **Changer la version dans une PR** :
 
    ```bash
    git checkout main
    git pull
-   npm version 0.2.0       # met à jour package.json, crée un commit ET le tag v0.2.0
-   git push --follow-tags  # envoie le commit et le tag sur GitHub
+   git checkout -b version-0.2.0
+   npm version 0.2.0 --no-git-tag-version   # modifie seulement package.json et package-lock.json
+   git commit -am "Version 0.2.0"
+   git push -u origin version-0.2.0
    ```
 
-4. Va dans l'onglet **Actions** du dépôt : l'action « Release » tourne (~5 min).
+   Puis ouvre la Pull Request sur GitHub (ou `gh pr create --fill`) et **fusionne-la**.
+
+3. **Créer et pousser le tag** sur `main` à jour (les tags ne sont pas bloqués par la protection) :
+
+   ```bash
+   git checkout main
+   git pull
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+4. Va dans l'onglet **Actions** du dépôt : l'action « Release » tourne (~3 min).
+   Elle refuse de publier si le tag ne correspond pas à la version de `package.json`.
 5. Quand elle est verte ✅, la nouvelle version apparaît dans **Releases**. Les applis déjà installées
    proposeront la mise à jour à leur prochain démarrage.
 
-> Si `main` est protégée (Pull Requests obligatoires), `git push` de ce commit peut être refusé :
-> fais alors le changement de version dans une PR, puis crée seulement le tag :
-> `git tag v0.2.0` puis `git push origin v0.2.0`.
+> Une erreur dans un tag ? Tant que personne n'a installé la version, on peut supprimer la Release
+> et le tag (`gh release delete v0.2.0 --cleanup-tag`) puis recommencer l'étape 3.
 
 ## 📁 Organisation du code
 
