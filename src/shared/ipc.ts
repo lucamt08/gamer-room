@@ -10,6 +10,10 @@ export const IPC = {
   updateGame: 'library:update',
   removeGame: 'library:remove',
 
+  // Jeux Steam installés
+  steamListGames: 'steam:list',
+  steamAddGames: 'steam:add',
+
   // Lancement
   launchGame: 'game:launch',
   killGame: 'game:kill',

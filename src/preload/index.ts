@@ -12,6 +12,7 @@ import type {
   SgdbGrid,
   SgdbSearchResult,
   Settings,
+  SteamGameEntry,
   UpdateStatus
 } from '@shared/types'
 
@@ -29,6 +30,10 @@ const api = {
   addGame: (path: string): Promise<Game> => ipcRenderer.invoke(IPC.addGame, path),
   updateGame: (id: string, patch: GamePatch): Promise<Game> => ipcRenderer.invoke(IPC.updateGame, id, patch),
   removeGame: (id: string): Promise<void> => ipcRenderer.invoke(IPC.removeGame, id),
+  /** Jeux Steam installés sur le PC. */
+  steamListGames: (): Promise<SteamGameEntry[]> => ipcRenderer.invoke(IPC.steamListGames),
+  /** Ajoute les jeux Steam choisis (par leur numéro Steam). */
+  steamAddGames: (appIds: number[]): Promise<Game[]> => ipcRenderer.invoke(IPC.steamAddGames, appIds),
   /** Chemin complet d'un fichier glissé-déposé dans la fenêtre. */
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 

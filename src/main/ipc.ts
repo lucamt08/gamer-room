@@ -8,6 +8,7 @@ import * as library from './library'
 import * as sgdb from './steamgriddb'
 import { launchGame, killRunningGame } from './gameLauncher'
 import { getSettings, saveSettings } from './settings'
+import { findSteamExe, listSteamGames } from './steamLibrary'
 import { registerKillShortcut } from './shortcuts'
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater'
 
@@ -35,6 +36,20 @@ export function registerIpcHandlers(hub: BrowserWindow): void {
     return library.updateGame(id, safe)
   })
   ipcMain.handle(IPC.removeGame, (_event, id: string) => library.removeGame(id))
+
+  // --- Jeux Steam ---
+  ipcMain.handle(IPC.steamListGames, () => {
+    const known = new Set(library.getGames().map((g) => g.steamAppId).filter((id): id is number => !!id))
+    return listSteamGames(known)
+  })
+  ipcMain.handle(IPC.steamAddGames, (_event, appIds: number[]) => {
+    const steamExe = findSteamExe()
+    if (!steamExe) throw new Error("Steam n'est pas installé sur ce PC.")
+    // On relit la liste nous-mêmes : l'interface n'envoie que des numéros, jamais des chemins
+    const wanted = new Set(appIds.filter((id) => Number.isInteger(id)))
+    const entries = listSteamGames(new Set()).filter((g) => wanted.has(g.appId))
+    return library.addSteamGames(entries, steamExe)
+  })
 
   // --- Lancement ---
   ipcMain.handle(IPC.launchGame, async (_event, id: string) => {

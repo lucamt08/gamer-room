@@ -17,7 +17,7 @@ const MAX_VARIANTS = 8
 /** Mots techniques qu'on trouve dans les noms de fichiers mais jamais dans le nom d'un jeu. */
 const NOISE_WORDS = [
   'launcher', 'x64', 'x86', 'win64', 'win32', 'shipping', 'dx11', 'dx12', 'vulkan', 'client',
-  'setup', 'bin', 'binaries', 'retail', 'exe', 'steam', 'epic', 'gog'
+  'setup', 'bin', 'binaries', 'retail', 'exe', 'steam', 'epic', 'gog', 'pc', 'prelauncher'
 ]
 
 /** Mots d'édition : utiles sur la boîte, mais souvent absents du nom chez SteamGridDB. */
@@ -246,7 +246,7 @@ function removeEditionWordsFromList(words: string[]): string[] {
 const GENERIC_WORDS = [
   'game', 'games', 'jeu', 'jeux', 'start', 'play', 'run', 'main', 'app', 'application', 'release',
   'build', 'content', 'common', 'steamapps', 'program', 'programs', 'files', 'local', 'appdata',
-  'users', 'xboxgames', 'galaxy', 'engine', 'win'
+  'users', 'xboxgames', 'galaxy', 'engine', 'win', 'stable', 'nightly', 'beta', 'builds'
 ]
 
 /** Noms de produit qui ne sont pas des jeux : Windows lui-même, moteurs de jeu, lanceurs techniques. */

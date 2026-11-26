@@ -2,12 +2,20 @@
 //
 // Déroulé quand on lance un jeu :
 //  1. on note les fenêtres déjà ouvertes (pour reconnaître la "nouvelle" fenêtre du jeu) ;
-//  2. on démarre le .exe ;
-//  3. on cache le hub ;
-//  4. pendant ~30 s, on cherche la fenêtre du jeu et on la passe en plein écran
-//     sans bordure (voir windowManager.ts) ;
+//  2. on démarre le .exe (le jeu, son launcher, son relais, ou Steam) ;
+//  3. le hub RESTE affiché avec l'écran de chargement (phase 'starting') ;
+//  4. toutes les 0,5 s, on cherche :
+//     - la fenêtre d'un launcher → on la met devant l'écran de chargement pour qu'on clique
+//       sur "Jouer" (phase 'launcher') ;
+//     - la fenêtre du VRAI jeu → plein écran sans bordure, puis on cache le hub (phase 'playing') ;
+//       au premier lancement, on retient quel .exe l'a ouverte (voir launchLearning.ts) ;
 //  5. toutes les secondes, on vérifie si le jeu tourne encore ;
 //     quand il est fermé, on réaffiche le hub.
+//
+// Comment on reconnaît la fenêtre du vrai jeu (du plus sûr au moins sûr) :
+//  - elle appartient au vrai .exe du jeu (`realExePath`, connu à l'ajout ou appris) ;
+//  - jeu Steam : elle appartient à un programme du dossier d'installation du jeu ;
+//  - sinon : la plus grande fenêtre du processus lancé ou de ses enfants (comme avant).
 //
 // Le raccourci global (Ctrl+Alt+F4 par défaut) appelle killRunningGame().
 
@@ -16,26 +24,41 @@ import { existsSync } from 'node:fs'
 import type { BrowserWindow } from 'electron'
 import type { Game, RunningState } from '@shared/types'
 import * as wm from './windowManager'
+import { ensureLaunchInfo } from './library'
+import { fixNameIfFromLauncher, learnFromGameWindow, samePath } from './launchLearning'
 
 // Réglages du suivi (en millisecondes)
-const WINDOW_SEARCH_TIMEOUT = 30_000 // on cherche la fenêtre pendant 30 s max
+const SEARCH_TIMEOUT = 30_000 // jeu "normal" : on cherche la fenêtre pendant 30 s max
+const SEARCH_TIMEOUT_LONG = 5 * 60_000 // launcher ou Steam : 5 min (le temps de cliquer sur Jouer, des mises à jour…)
 const WINDOW_SEARCH_INTERVAL = 500 // toutes les 0,5 s
 const WINDOW_STABLE_DELAY = 5_000 // une fois en plein écran, on surveille encore 5 s
 const PROCESS_CHECK_INTERVAL = 1_000 // on vérifie que le jeu tourne toutes les secondes
+const MIN_LOADING_TIME = 1_500 // l'écran de chargement reste au moins 1,5 s (évite un clignotement)
+const LAUNCHER_CLOSED_DELAY = 15 // launcher fermé sans lancer le jeu : on abandonne après 15 s
+
+type Phase = NonNullable<RunningState['phase']>
 
 /** Tout ce qu'on sait sur le jeu en cours. */
 interface Session {
   game: Game
   /** Pid du processus qu'on a lancé nous-mêmes. */
   rootPid: number
-  /** Tous les pids "du jeu" qu'on a vus vivants (launcher, enfants, fenêtre trouvée…). */
+  /** Tous les pids "du lancement" qu'on a vus vivants (launcher, enfants…). */
   knownPids: Set<number>
+  /** Les pids du vrai jeu (propriétaire de la fenêtre du jeu + ses enfants). */
+  gamePids: Set<number>
   /** La fenêtre du jeu, une fois trouvée. */
   gameWindow: wm.Hwnd | null
+  /** La dernière fenêtre de launcher mise au premier plan. */
+  launcherWindow: wm.Hwnd | null
   /** Fenêtres présentes avant le lancement. */
   windowsBeforeLaunch: Set<wm.Hwnd>
   /** La recherche de fenêtre est-elle terminée (trouvée et stable, ou délai dépassé) ? */
   searchDone: boolean
+  startedAt: number
+  phase: Phase
+  /** Chemins des .exe déjà lus (lire le chemin d'un processus coûte un peu). */
+  paths: Map<number, string | null>
   timers: NodeJS.Timeout[]
 }
 
@@ -67,17 +90,31 @@ export function parseArgs(line: string): string[] {
   return result
 }
 
+/** Le jeu passe-t-il par un intermédiaire qui peut prendre du temps (launcher, Steam) ? */
+function isSlowStart(game: Game): boolean {
+  return game.launchKind === 'launcher' || game.launchKind === 'steam'
+}
+
+/** Prévient l'interface de l'état du lancement. */
+function sendState(s: Session, extra: Partial<RunningState> = {}): void {
+  notify({ running: true, gameId: s.game.id, phase: s.phase, ...extra })
+}
+
 /** Lance un jeu. Renvoie une promesse qui se résout dès que le processus a démarré. */
-export function launchGame(game: Game): Promise<void> {
+export function launchGame(gameToLaunch: Game): Promise<void> {
   return new Promise((resolve, reject) => {
     if (session) {
       reject(new Error('Un jeu est déjà en cours.'))
       return
     }
-    if (!existsSync(game.exePath)) {
-      reject(new Error(`Fichier introuvable : ${game.exePath}`))
+    if (!existsSync(gameToLaunch.exePath)) {
+      reject(new Error(`Fichier introuvable : ${gameToLaunch.exePath}`))
       return
     }
+
+    // Jeux ajoutés avant la détection des launchers : on la fait maintenant
+    const isNewInfo = !gameToLaunch.launchKind
+    const game = ensureLaunchInfo(gameToLaunch)
 
     // 1. Fenêtres déjà présentes
     const windowsBeforeLaunch = new Set(wm.listAllWindowHandles())
@@ -98,63 +135,193 @@ export function launchGame(game: Game): Promise<void> {
     child.once('spawn', () => {
       child.unref()
       const pid = child.pid!
-      console.log(`[launcher] "${game.name}" démarré (pid ${pid})`)
+      console.log(`[launcher] "${game.name}" démarré (pid ${pid}, type : ${game.launchKind})`)
 
-      session = {
+      const s: Session = {
         game,
         rootPid: pid,
         knownPids: new Set([pid]),
+        gamePids: new Set(),
         gameWindow: null,
+        launcherWindow: null,
         windowsBeforeLaunch,
-        searchDone: !game.forceFullscreen,
+        searchDone: false,
+        startedAt: Date.now(),
+        phase: 'starting',
+        paths: new Map(),
         timers: []
       }
+      session = s
 
-      // 3. On cache le hub
-      hubWindow?.hide()
-      notify({ running: true, gameId: game.id, message: `${game.name} lancé` })
+      // 3. Le hub reste affiché : l'interface montre l'écran de chargement
+      sendState(s, { game })
 
-      // 4. Recherche de la fenêtre + plein écran
-      if (game.forceFullscreen) startWindowSearch(session)
+      // Un ancien jeu qui porte le nom de son launcher ("Longshot") : on cherche son vrai nom tout de suite
+      if (isNewInfo) {
+        fixNameIfFromLauncher(game.id).then((updated) => {
+          if (updated && session === s) {
+            s.game = updated
+            sendState(s, { game: updated })
+          }
+        })
+      }
+
+      // 4. Recherche des fenêtres (launcher puis jeu)
+      startWindowSearch(s)
       // 5. Surveillance de la fin du jeu
-      startProcessWatch(session)
+      startProcessWatch(s)
       resolve()
     })
   })
 }
 
+/** Chemin du .exe d'un processus (avec cache). */
+function pathOf(s: Session, pid: number): string | null {
+  if (!s.paths.has(pid)) s.paths.set(pid, wm.getProcessPath(pid))
+  return s.paths.get(pid) ?? null
+}
+
+/** Le chemin est-il dans ce dossier (ou un de ses sous-dossiers) ? */
+function isInside(path: string, folder: string): boolean {
+  const base = folder.toLowerCase().replace(/\\+$/, '') + '\\'
+  return path.toLowerCase().startsWith(base)
+}
+
+const area = (w: wm.WindowInfo): number => (w.rect.right - w.rect.left) * (w.rect.bottom - w.rect.top)
+
+/** Une fenêtre qui couvre presque tout l'écran : c'est un jeu, pas un petit launcher. */
+function coversScreen(w: wm.WindowInfo): boolean {
+  const monitor = wm.getMonitorRectForWindow(w.hwnd)
+  if (!monitor) return false
+  return area(w) >= (monitor.right - monitor.left) * (monitor.bottom - monitor.top) * 0.7
+}
+
 /**
- * Cherche la fenêtre du jeu à intervalle régulier et la passe en plein écran.
+ * Regarde les fenêtres ouvertes et renvoie :
+ *  - `game`     : la fenêtre du vrai jeu, ou null ;
+ *  - `launcher` : la fenêtre d'un launcher (à mettre devant l'écran de chargement), ou null.
+ */
+function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.WindowInfo | null } {
+  const g = s.game
+  const windows = wm.listAppWindows().filter((w) => w.pid !== process.pid)
+  const tree = wm.getProcessTree(s.rootPid)
+  const biggestFirst = (list: wm.WindowInfo[]): wm.WindowInfo[] => list.sort((a, b) => area(b) - area(a))
+
+  // Jeu Steam : un programme de son dossier dont le nom contient "launcher" est le launcher
+  // de l'éditeur (ex. le REDlauncher de The Witcher 3), pas le jeu… sauf s'il couvre l'écran.
+  const inSteamFolder = (w: wm.WindowInfo): boolean => {
+    const path = pathOf(s, w.pid)
+    return g.launchKind === 'steam' && !!path && !!g.gameFolder && isInside(path, g.gameFolder)
+  }
+  const isSteamLauncher = (w: wm.WindowInfo): boolean =>
+    inSteamFolder(w) && /launch/i.test(pathOf(s, w.pid) ?? '') && !coversScreen(w)
+
+  // 1. Fenêtres du vrai jeu, reconnues par le chemin de leur .exe
+  const isRealGame = (w: wm.WindowInfo): boolean =>
+    samePath(pathOf(s, w.pid), g.realExePath) || (inSteamFolder(w) && !isSteamLauncher(w))
+  let games = windows.filter((w) => isRealGame(w) && wm.looksLikeMainWindow(w))
+
+  // 2. Sinon, les fenêtres du processus lancé et de ses enfants
+  if (games.length === 0 && g.launchKind !== 'steam') {
+    const fromTree = windows.filter((w) => tree.has(w.pid) && wm.looksLikeMainWindow(w))
+    if (g.launchKind === 'launcher') {
+      // Launcher : ses propres fenêtres ne sont pas le jeu… sauf si elles couvrent l'écran
+      // (au cas où la détection s'est trompée et que ce "launcher" est le jeu lui-même)
+      games = fromTree.filter((w) => !samePath(pathOf(s, w.pid), g.exePath) || coversScreen(w))
+    } else {
+      games = fromTree
+    }
+
+    // 3. Dernier recours (jeu ou relais) : une nouvelle fenêtre au premier plan
+    if (games.length === 0 && g.launchKind !== 'launcher') {
+      const foreground = wm.getForegroundWindow()
+      const info = windows.find((w) => w.hwnd === foreground)
+      if (info && !s.windowsBeforeLaunch.has(info.hwnd) && wm.looksLikeMainWindow(info)) games = [info]
+    }
+  }
+
+  const game = biggestFirst(games)[0] ?? null
+  // Fenêtre de launcher : une fenêtre du processus lancé (ou de ses enfants) qui n'est pas le jeu,
+  // ou le launcher de l'éditeur d'un jeu Steam
+  const launchers = windows.filter(
+    (w) => w !== game && ((g.launchKind === 'launcher' && tree.has(w.pid)) || isSteamLauncher(w))
+  )
+  return { game, launcher: biggestFirst(launchers)[0] ?? null }
+}
+
+/** Cache le hub une fois l'écran de chargement resté affiché assez longtemps. */
+function hideHubSoon(s: Session): void {
+  const wait = Math.max(0, MIN_LOADING_TIME - (Date.now() - s.startedAt))
+  const timer = setTimeout(() => {
+    if (session === s) hubWindow?.hide()
+  }, wait)
+  s.timers.push(timer)
+}
+
+/** La fenêtre du jeu vient d'être trouvée : on passe en phase "en jeu". */
+function onGameWindowFound(s: Session, win: wm.WindowInfo): void {
+  s.gameWindow = win.hwnd
+  for (const pid of wm.getProcessTree(win.pid)) s.gamePids.add(pid)
+
+  if (s.phase !== 'playing') {
+    s.phase = 'playing'
+    hideHubSoon(s)
+    sendState(s, { message: `${s.game.name} lancé` })
+
+    // Premier lancement : on retient le vrai .exe, et on corrige le nom / la jaquette si besoin
+    learnFromGameWindow(s.game.id, pathOf(s, win.pid)).then((updated) => {
+      if (updated && session === s) {
+        s.game = updated
+        sendState(s, { game: updated })
+      }
+    })
+  }
+}
+
+/**
+ * Cherche les fenêtres à intervalle régulier.
  *
- * Pourquoi continuer après l'avoir trouvée ? Parce que certains jeux :
+ * Pourquoi continuer après avoir trouvé le jeu ? Parce que certains jeux :
  *  - affichent d'abord un splash, puis la vraie fenêtre ;
  *  - se redimensionnent eux-mêmes juste après le démarrage (et remettent leur bordure).
  * On attend donc que la même fenêtre reste en plein écran pendant 5 s.
  */
 function startWindowSearch(s: Session): void {
-  const startedAt = Date.now()
+  const timeout = isSlowStart(s.game) ? SEARCH_TIMEOUT_LONG : SEARCH_TIMEOUT
   let stableSince = 0
 
   const timer = setInterval(() => {
     if (session !== s) return clearInterval(timer)
 
     try {
-      const found = wm.findGameWindow({
-        rootPid: s.rootPid,
-        windowsBeforeLaunch: s.windowsBeforeLaunch,
-        excludedPids: new Set([process.pid])
-      })
+      const found = findWindows(s)
 
-      if (found) {
-        const { hwnd, pid, title } = found.window
+      // Fenêtre de launcher : on la met devant l'écran de chargement (une fois par fenêtre)
+      if (!found.game && found.launcher && found.launcher.hwnd !== s.launcherWindow) {
+        console.log(`[launcher] Fenêtre de launcher : "${found.launcher.title}"`)
+        s.launcherWindow = found.launcher.hwnd
+        wm.bringToFront(found.launcher.hwnd)
+        if (s.phase === 'starting') {
+          s.phase = 'launcher'
+          sendState(s)
+        }
+      }
+
+      if (found.game) {
+        const { hwnd, pid, title } = found.game
         s.knownPids.add(pid)
-
         if (hwnd !== s.gameWindow) {
-          console.log(`[launcher] Fenêtre trouvée (${found.source}) : "${title}" pid ${pid}`)
-          s.gameWindow = hwnd
+          console.log(`[launcher] Fenêtre du jeu trouvée : "${title}" pid ${pid}`)
+          onGameWindowFound(s, found.game)
           stableSince = 0
         }
 
+        if (!s.game.forceFullscreen) {
+          // Pas de plein écran forcé : il suffisait de trouver la fenêtre pour cacher le hub
+          s.searchDone = true
+          clearInterval(timer)
+          return
+        }
         if (!wm.isBorderlessFullscreen(hwnd)) {
           wm.makeBorderlessFullscreen(hwnd)
           stableSince = 0
@@ -169,8 +336,16 @@ function startWindowSearch(s: Session): void {
         }
       }
 
-      if (Date.now() - startedAt > WINDOW_SEARCH_TIMEOUT) {
-        if (!s.gameWindow) console.warn('[launcher] Aucune fenêtre de jeu trouvée après 30 s')
+      if (Date.now() - s.startedAt > timeout) {
+        if (!s.gameWindow) {
+          console.warn(`[launcher] Aucune fenêtre de jeu trouvée après ${timeout / 1000} s`)
+          // On cache quand même le hub : le jeu est peut-être là, mais pas reconnu
+          if (s.phase !== 'playing') {
+            s.phase = 'playing'
+            hubWindow?.hide()
+            sendState(s)
+          }
+        }
         s.searchDone = true
         clearInterval(timer)
       }
@@ -184,10 +359,10 @@ function startWindowSearch(s: Session): void {
 
 /**
  * Vérifie chaque seconde si le jeu tourne encore.
- * Le jeu est considéré "fermé" quand :
- *  - aucun des processus connus (lanceur, enfants, propriétaire de la fenêtre) n'est vivant,
- *  - ET la recherche de fenêtre est terminée (sinon un launcher qui se ferme vite
- *    ferait réapparaître le hub avant que le vrai jeu n'ouvre sa fenêtre).
+ *  - Fenêtre du jeu trouvée : le jeu est "fermé" quand sa fenêtre et ses processus ont disparu
+ *    (un launcher resté ouvert, ou Steam, ne compte pas).
+ *  - Pas encore de fenêtre : on attend la fin de la recherche, sauf si un launcher a été fermé
+ *    sans lancer le jeu (rien ne tourne depuis 15 s).
  * On attend 2 vérifications "mortes" d'affilée pour éviter les faux positifs.
  */
 function startProcessWatch(s: Session): void {
@@ -197,17 +372,25 @@ function startProcessWatch(s: Session): void {
     if (session !== s) return clearInterval(timer)
 
     const processes = wm.snapshotProcesses()
-    // On ajoute les nouveaux descendants du processus lancé
-    for (const pid of wm.getProcessTree(s.rootPid, processes)) s.knownPids.add(pid)
+    // On ajoute les nouveaux descendants du processus lancé, et ceux du jeu
+    if (s.game.launchKind !== 'steam') for (const pid of wm.getProcessTree(s.rootPid, processes)) s.knownPids.add(pid)
+    for (const pid of [...s.gamePids]) for (const child of wm.getProcessTree(pid, processes)) s.gamePids.add(child)
 
-    const alive =
-      [...s.knownPids].some((pid) => processes.has(pid)) ||
-      (s.gameWindow !== null && wm.windowExists(s.gameWindow))
+    let alive: boolean
+    if (s.gameWindow) {
+      const gameAlive = wm.windowExists(s.gameWindow) || [...s.gamePids].some((pid) => processes.has(pid))
+      // Jeu "normal" ou relais : on garde l'ancienne règle (tous les processus du lancement comptent)
+      const launchAlive = !isSlowStart(s.game) && [...s.knownPids].some((pid) => processes.has(pid))
+      alive = gameAlive || launchAlive
+    } else {
+      alive = [...s.knownPids].some((pid) => processes.has(pid))
+    }
 
     deadChecks = alive ? 0 : deadChecks + 1
-    if (deadChecks >= 2 && s.searchDone) {
+    const launcherGaveUp = s.game.launchKind === 'launcher' && !s.gameWindow && deadChecks >= LAUNCHER_CLOSED_DELAY
+    if ((deadChecks >= 2 && (s.searchDone || s.gameWindow)) || launcherGaveUp) {
       console.log(`[launcher] "${s.game.name}" fermé`)
-      endSession()
+      endSession(launcherGaveUp ? 'Launcher fermé sans lancer le jeu' : undefined)
     }
   }, PROCESS_CHECK_INTERVAL)
 
@@ -228,15 +411,17 @@ function endSession(message?: string): void {
 }
 
 /**
- * Force la fermeture du jeu en cours (raccourci global).
+ * Force la fermeture du jeu en cours (raccourci global, ou bouton "Annuler" de l'écran de chargement).
  * On utilise `taskkill /T /F` : /T tue aussi les processus enfants, /F force.
+ * Pour un jeu Steam, on ne ferme jamais Steam lui-même : seulement le jeu.
  */
 export function killRunningGame(): void {
   const s = session
   if (!s) return
   console.log(`[launcher] Fermeture forcée de "${s.game.name}"`)
   const processes = wm.snapshotProcesses()
-  for (const pid of s.knownPids) {
+  const targets = s.game.launchKind === 'steam' ? s.gamePids : new Set([...s.knownPids, ...s.gamePids])
+  for (const pid of targets) {
     if (processes.has(pid)) {
       execFile('taskkill', ['/PID', String(pid), '/T', '/F'], (error) => {
         if (error) console.warn(`[launcher] taskkill ${pid} :`, error.message)

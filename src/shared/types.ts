@@ -28,6 +28,33 @@ export interface Game {
    * Absent pour les jeux ajoutés avant cette version (rempli à la prochaine recherche de jaquette).
    */
   publisher?: string | null
+  /**
+   * Ce que lance vraiment `exePath` (détecté à l'ajout, voir launcherDetect.ts) :
+   *  - 'game'     : le jeu lui-même ;
+   *  - 'launcher' : un launcher avec une fenêtre (REDlauncher de Cyberpunk, Longshot…) ;
+   *  - 'relay'    : un petit .exe sans fenêtre qui démarre aussitôt le vrai jeu (b1.exe de Wukong) ;
+   *  - 'steam'    : un jeu Steam, lancé par Steam.
+   * Absent pour les jeux ajoutés avant cette version (détecté au prochain lancement).
+   */
+  launchKind?: LaunchKind
+  /** Chemin du vrai .exe du jeu quand on passe par un launcher (connu à l'ajout ou appris au premier lancement). */
+  realExePath?: string | null
+  /** Dossier d'installation du jeu : toute fenêtre d'un programme de ce dossier est "la fenêtre du jeu". */
+  gameFolder?: string | null
+  /** Numéro du jeu chez Steam (jeux Steam uniquement). */
+  steamAppId?: number | null
+}
+
+export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam'
+
+/** Un jeu Steam installé sur le PC (pour l'import). */
+export interface SteamGameEntry {
+  appId: number
+  name: string
+  /** Dossier d'installation, ex. D:\SteamLibrary\steamapps\common\Cyberpunk 2077 */
+  installDir: string
+  /** Déjà présent dans la bibliothèque ? */
+  alreadyAdded: boolean
 }
 
 /** Les champs qu'on peut modifier depuis l'écran "Modifier". */
@@ -83,8 +110,17 @@ export type AutoCoverResult =
 export interface RunningState {
   running: boolean
   gameId: string | null
+  /**
+   * Étape du lancement (pour l'écran de chargement) :
+   *  - 'starting' : le jeu (ou son launcher) démarre, on attend sa fenêtre ;
+   *  - 'launcher' : la fenêtre d'un launcher est ouverte, il faut y cliquer sur "Jouer" ;
+   *  - 'playing'  : la fenêtre du jeu est là, le hub est caché.
+   */
+  phase?: 'starting' | 'launcher' | 'playing'
   /** Message court pour l'utilisateur (ex. "Plein écran appliqué"). */
   message?: string
+  /** Le jeu à jour, quand le lancement a appris quelque chose (vrai .exe, nouveau nom, jaquette…). */
+  game?: Game
 }
 
 /** État de la mise à jour automatique, envoyé à l'interface. */

@@ -107,6 +107,10 @@ const CreateToolhelp32Snapshot = kernel32.func('void * __stdcall CreateToolhelp3
 const Process32FirstW = kernel32.func('bool __stdcall Process32FirstW(void *snap, _Inout_ PROCESSENTRY32W *entry)')
 const Process32NextW = kernel32.func('bool __stdcall Process32NextW(void *snap, _Inout_ PROCESSENTRY32W *entry)')
 const CloseHandle = kernel32.func('bool __stdcall CloseHandle(void *handle)')
+const OpenProcess = kernel32.func('void * __stdcall OpenProcess(uint32 access, bool inherit, uint32 pid)')
+const QueryFullProcessImageNameW = kernel32.func(
+  'bool __stdcall QueryFullProcessImageNameW(void *process, uint32 flags, _Out_ uint8_t *buf, _Inout_ uint32 *size)'
+)
 
 // ----------------------------------------------------------------------------
 //  4. Constantes Windows (valeurs tirées de la documentation Microsoft)
@@ -138,6 +142,7 @@ const SWP_SHOWWINDOW = 0x0040
 const MONITOR_DEFAULTTONEAREST = 2
 const SW_RESTORE = 9
 const TH32CS_SNAPPROCESS = 0x2
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000 // droit minimal pour lire le chemin d'un processus
 const VK_MENU = 0x12 // touche Alt
 const KEYEVENTF_KEYUP = 0x2
 
@@ -230,6 +235,24 @@ export function getProcessTree(rootPid: number, processes = snapshotProcesses())
     }
   }
   return tree
+}
+
+/**
+ * Chemin complet du .exe d'un processus (ex. "D:\jeux\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe"),
+ * ou null si Windows refuse (processus système, ou déjà fermé).
+ * Sert à reconnaître la fenêtre du vrai jeu quand il est lancé par un launcher ou par Steam.
+ */
+export function getProcessPath(pid: number): string | null {
+  const handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+  if (!handle) return null
+  try {
+    const buffer = Buffer.alloc(2048) // 1024 caractères UTF-16
+    const size = [1024]
+    if (!QueryFullProcessImageNameW(handle, 0, buffer, size)) return null
+    return buffer.toString('utf16le', 0, size[0] * 2)
+  } finally {
+    CloseHandle(handle)
+  }
 }
 
 // ----------------------------------------------------------------------------
