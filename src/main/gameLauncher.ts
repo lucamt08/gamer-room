@@ -131,6 +131,14 @@ export function launchGame(gameToLaunch: Game): Promise<void> {
     const child = skip ? startProcess(game.realExePath!, '', dirname(game.realExePath!)) : startProcess(game.exePath, game.args, game.workingDir)
 
     child.once('error', (error) => {
+      // Le vrai .exe demande les droits administrateur (EACCES) : Windows refuse de le lancer
+      // sans la fenêtre "Contrôle de compte d'utilisateur". On passe alors par le launcher, pour cette fois
+      // seulement (si on retire l'option "Exécuter en tant qu'administrateur", le lancement direct remarchera).
+      if (skip && (error as NodeJS.ErrnoException).code === 'EACCES') {
+        console.warn(`[launcher] ${game.realExePath} demande les droits administrateur : on passe par le launcher`)
+        launchGame({ ...game, skipLauncher: false }).then(resolve, reject)
+        return
+      }
       endSession('Erreur au lancement')
       reject(new Error(`Impossible de lancer le jeu : ${error.message}`))
     })

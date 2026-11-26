@@ -10,6 +10,7 @@ import { readJson, writeJson } from './jsonStore'
 import { coverPath } from './covers'
 import { readExeInfo } from './exeInfo'
 import { detectLaunchKind } from './launcherDetect'
+import { removeRunAsAdmin } from './compatFlags'
 
 const FILE = 'library.json'
 
@@ -84,6 +85,9 @@ export function addGameFromPath(path: string): Game {
   const info = readExeInfo(exePath)
   // Le jeu lui-même, un launcher ou un relais ? (voir launcherDetect.ts)
   const launch = detectLaunchKind(exePath, info)
+  // « Exécuter en tant qu'administrateur » empêche le hub de lancer le jeu : on décoche l'option
+  removeRunAsAdmin(exePath)
+  removeRunAsAdmin(launch.realExePath)
   const game: Game = {
     id: randomUUID(),
     name,

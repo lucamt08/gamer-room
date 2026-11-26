@@ -8,6 +8,7 @@
 import type { Game } from '@shared/types'
 import { getGame, updateGame } from './library'
 import { readExeInfo } from './exeInfo'
+import { removeRunAsAdmin } from './compatFlags'
 import { autoCover, nameComesFromLauncher } from './steamgriddb'
 
 /** Deux chemins Windows désignent-ils le même fichier ? (Windows ne fait pas la différence majuscules/minuscules) */
@@ -39,6 +40,9 @@ export async function learnFromGameWindow(gameId: string, windowExePath: string 
     // Un "jeu" qui fait ouvrir sa fenêtre par un autre programme est en fait un relais
     launchKind: !game.launchKind || game.launchKind === 'game' ? 'relay' : game.launchKind
   })
+  // Jeu Steam ou relais : on découvre seulement maintenant son vrai .exe → on décoche
+  // « Exécuter en tant qu'administrateur » pour que les prochains lancements se passent bien
+  removeRunAsAdmin(windowExePath)
   const publisher = readExeInfo(windowExePath).publisher
   if (publisher && !updated.publisher) updated = updateGame(gameId, { publisher })
 
