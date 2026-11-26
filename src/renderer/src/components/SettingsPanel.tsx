@@ -1,4 +1,4 @@
-// Écran "Paramètres" : clé SteamGridDB, raccourci de fermeture, plein écran, version.
+// Écran "Paramètres" : clé SteamGridDB, raccourci de fermeture, plein écran, temps de jeu, version.
 import { forwardRef, useEffect, useState } from 'react'
 import type { Settings } from '@shared/types'
 import Modal from './Modal'
@@ -73,6 +73,20 @@ const SettingsPanel = forwardRef<HTMLDivElement, Props>(function SettingsPanel({
           />
           Démarrer le hub en plein écran (F11 pour basculer à tout moment)
         </label>
+
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={settings.trackOutsideApp}
+            onChange={(e) => update({ trackOutsideApp: e.target.checked })}
+          />
+          Compter le temps de jeu même quand le jeu n'est pas lancé depuis Gamer Room
+        </label>
+        <p className="hint">
+          Gamer Room démarre alors avec Windows et reste près de l'horloge : la croix cache le hub sans le
+          quitter. Pour la fermer vraiment : clic droit sur son icône → Quitter. Les jeux Steam sont toujours à
+          jour (leur temps vient de Steam).
+        </p>
 
         {message && <p className={message.error ? 'error' : 'success'}>{message.text}</p>}
 

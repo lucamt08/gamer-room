@@ -1,8 +1,7 @@
 // Point d'entrée du processus principal (main) : c'est le premier code exécuté.
 // Il crée la fenêtre du hub et branche tous les modules.
 
-import { app, BrowserWindow, globalShortcut, shell } from 'electron'
-import { join } from 'node:path'
+import { app, globalShortcut } from 'electron'
 import { IPC } from '@shared/ipc'
 import { registerCoverSchemeAsPrivileged, handleCoverProtocol } from './covers'
 import { registerIpcHandlers } from './ipc'
@@ -11,6 +10,9 @@ import { getSettings } from './settings'
 import { registerKillShortcut } from './shortcuts'
 import { initUpdater } from './updater'
 import { fixLauncherNamesAtStartup } from './launchLearning'
+import { createHub, sendToHub, showHub } from './hub'
+import { applyBackgroundMode, isBackgroundMode, startedHidden } from './background'
+import { savePlaytimeNow, startPlaytimeTracker } from './playtimeTracker'
 
 // Une seule instance du hub à la fois : si on le relance, on remet l'existant au premier plan.
 if (!app.requestSingleInstanceLock()) {
@@ -20,77 +22,41 @@ if (!app.requestSingleInstanceLock()) {
 // Doit être fait AVANT que l'appli soit prête
 registerCoverSchemeAsPrivileged()
 
-let hub: BrowserWindow | null = null
-
-function createHubWindow(): BrowserWindow {
-  const window = new BrowserWindow({
-    width: 1400,
-    height: 860,
-    minWidth: 900,
-    minHeight: 600,
-    show: false,
-    backgroundColor: '#0d0f14',
-    autoHideMenuBar: true,
-    title: 'Gamer Room',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      // Sécurité Electron de base :
-      contextIsolation: true, // l'interface ne voit pas les objets du preload directement
-      nodeIntegration: false, // l'interface n'a PAS accès à Node.js
-      sandbox: true
-    }
-  })
-
-  window.once('ready-to-show', () => {
-    if (getSettings().startFullscreen) window.setFullScreen(true)
-    window.show()
-  })
-
-  // Les liens externes (ex. site SteamGridDB) s'ouvrent dans le navigateur, pas dans le hub
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  // En développement, electron-vite fournit une adresse locale avec rechargement à chaud
-  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    window.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    window.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-
-  return window
-}
-
-app.on('second-instance', () => {
-  if (hub) {
-    if (hub.isMinimized()) hub.restore()
-    hub.show()
-    hub.focus()
-  }
-})
+// Gamer Room relancée (raccourci, menu Démarrer…) alors qu'elle tourne déjà : on ouvre le hub
+app.on('second-instance', () => showHub())
 
 app.whenReady().then(() => {
   handleCoverProtocol()
 
-  hub = createHubWindow()
-  const send = (channel: string, payload: unknown): void => {
-    if (hub && !hub.isDestroyed()) hub.webContents.send(channel, payload)
-  }
-
-  registerIpcHandlers(hub)
-  initGameLauncher(hub, (state) => send(IPC.runningState, state))
-  initUpdater((status) => send(IPC.updateStatus, status))
+  registerIpcHandlers()
+  initGameLauncher((state) => sendToHub(IPC.runningState, state))
+  initUpdater((status) => sendToHub(IPC.updateStatus, status))
 
   // Jeux qui portent encore le nom de leur launcher : on cherche leur vrai nom une fois l'interface prête
-  hub.webContents.once('did-finish-load', () => {
-    fixLauncherNamesAtStartup((game) => send(IPC.gameUpdated, game))
-  })
+  const fixNames = (): void => {
+    fixLauncherNamesAtStartup((game) => sendToHub(IPC.gameUpdated, game))
+  }
+  // Lancée par Windows au démarrage du PC : on reste discrète, près de l'horloge, sans ouvrir le hub
+  if (startedHidden()) {
+    fixNames()
+  } else {
+    createHub().webContents.once('did-finish-load', fixNames)
+  }
+
+  // Compteur de temps de jeu + icône près de l'horloge / démarrage avec Windows (si l'option est activée)
+  startPlaytimeTracker((game) => sendToHub(IPC.gameUpdated, game))
+  applyBackgroundMode()
 
   if (!registerKillShortcut(getSettings().killShortcut)) {
     console.warn(`[main] Raccourci "${getSettings().killShortcut}" indisponible`)
   }
 })
 
+// Croix du hub : on quitte, sauf en mode arrière-plan (Gamer Room continue de compter le temps de jeu)
+app.on('window-all-closed', () => {
+  if (!isBackgroundMode()) app.quit()
+})
+
+// Avant de quitter : on enregistre le temps de jeu compté depuis la dernière minute
+app.on('before-quit', () => savePlaytimeNow())
 app.on('will-quit', () => globalShortcut.unregisterAll())
-app.on('window-all-closed', () => app.quit())

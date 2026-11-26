@@ -1,7 +1,7 @@
 // Branche chaque fonction appelable depuis l'interface sur le code du main.
 // L'interface n'a accès QU'À ces fonctions (voir preload/index.ts).
 
-import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import type { GamePatch, Settings } from '@shared/types'
 import { IPC } from '@shared/ipc'
 import * as library from './library'
@@ -11,13 +11,21 @@ import { getSettings, saveSettings } from './settings'
 import { findSteamExe, listSteamGames } from './steamLibrary'
 import { registerKillShortcut } from './shortcuts'
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater'
+import { applyBackgroundMode } from './background'
 
-export function registerIpcHandlers(hub: BrowserWindow): void {
+/** La fenêtre qui a fait la demande (le hub). */
+function windowOf(event: IpcMainInvokeEvent): BrowserWindow {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  if (!window) throw new Error('Fenêtre introuvable.')
+  return window
+}
+
+export function registerIpcHandlers(): void {
   // --- Bibliothèque ---
   ipcMain.handle(IPC.getGames, () => library.getGames())
 
-  ipcMain.handle(IPC.pickExecutable, async () => {
-    const result = await dialog.showOpenDialog(hub, {
+  ipcMain.handle(IPC.pickExecutable, async (event) => {
+    const result = await dialog.showOpenDialog(windowOf(event), {
       title: 'Choisir un jeu ou un programme',
       properties: ['openFile'],
       filters: [{ name: 'Programmes et raccourcis', extensions: ['exe', 'lnk'] }]
@@ -28,12 +36,16 @@ export function registerIpcHandlers(hub: BrowserWindow): void {
   ipcMain.handle(IPC.addGame, (_event, path: string) => library.addGameFromPath(path))
   ipcMain.handle(IPC.updateGame, (_event, id: string, patch: GamePatch) => {
     // On ne laisse passer que les champs modifiables depuis l'interface
-    const { name, args, forceFullscreen, skipLauncher } = patch
+    const { name, args, forceFullscreen, skipLauncher, playtimeSeconds } = patch
     const safe: GamePatch = {}
     if (typeof name === 'string' && name.trim()) safe.name = name.trim()
     if (typeof args === 'string') safe.args = args
     if (typeof forceFullscreen === 'boolean') safe.forceFullscreen = forceFullscreen
     if (typeof skipLauncher === 'boolean') safe.skipLauncher = skipLauncher
+    // Valeur de départ du compteur de temps de jeu (en secondes, jamais négative)
+    if (typeof playtimeSeconds === 'number' && Number.isFinite(playtimeSeconds)) {
+      safe.playtimeSeconds = Math.max(0, Math.round(playtimeSeconds))
+    }
     return library.updateGame(id, safe)
   })
   ipcMain.handle(IPC.removeGame, (_event, id: string) => library.removeGame(id))
@@ -79,15 +91,19 @@ export function registerIpcHandlers(hub: BrowserWindow): void {
         throw new Error(`Raccourci "${patch.killShortcut}" invalide ou déjà utilisé par une autre appli.`)
       }
     }
-    return saveSettings(patch)
+    const saved = saveSettings(patch)
+    // Option « compter en dehors de l'appli » changée : démarrage avec Windows + icône près de l'horloge
+    if (patch.trackOutsideApp !== undefined) applyBackgroundMode()
+    return saved
   })
 
   // --- Fenêtre du hub ---
-  ipcMain.handle(IPC.toggleFullscreen, () => {
+  ipcMain.handle(IPC.toggleFullscreen, (event) => {
+    const hub = windowOf(event)
     hub.setFullScreen(!hub.isFullScreen())
     return hub.isFullScreen()
   })
-  ipcMain.handle(IPC.setFullscreen, (_event, value: boolean) => hub.setFullScreen(value))
+  ipcMain.handle(IPC.setFullscreen, (event, value: boolean) => windowOf(event).setFullScreen(value))
 
   // --- Mise à jour ---
   ipcMain.handle(IPC.checkUpdate, () => checkForUpdates())

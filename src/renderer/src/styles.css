@@ -764,6 +764,7 @@ kbd {
 
 input[type='text'],
 input[type='password'],
+input[type='number'],
 input:not([type]) {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -783,6 +784,17 @@ input[type='checkbox'] {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+}
+
+/* Temps de jeu de départ : deux petits champs "heures" et "minutes" côte à côte */
+.playtime-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playtime-inputs input {
+  width: 90px;
 }
 
 .form-actions {

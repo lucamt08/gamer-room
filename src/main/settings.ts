@@ -10,7 +10,8 @@ const FILE = 'settings.json'
 export const DEFAULT_SETTINGS: Settings = {
   steamGridDbApiKey: '',
   killShortcut: 'Ctrl+Alt+F4',
-  startFullscreen: false
+  startFullscreen: false,
+  trackOutsideApp: true // compter le temps de jeu même hors de Gamer Room (démarre avec Windows)
 }
 
 let cache: Settings | null = null

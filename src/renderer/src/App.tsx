@@ -1,6 +1,7 @@
 // Composant principal : l'étagère + les fenêtres modales + la navigation.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Game, RunningState, SgdbGame } from '@shared/types'
+import { formatPlaytime, playtimeFromSteam, totalPlaytimeSeconds } from '@shared/playtime'
 import Shelf from './components/Shelf'
 import GameEditor from './components/GameEditor'
 import CoverPicker from './components/CoverPicker'
@@ -26,6 +27,17 @@ function formatLastPlayed(lastPlayedAt: string | null): string {
   if (days <= 0) return "Joué aujourd'hui"
   if (days === 1) return 'Joué hier'
   return `Joué il y a ${days} jours`
+}
+
+/**
+ * Ligne affichée sous le nom du jeu sélectionné : temps de jeu total + dernière partie.
+ * Ex. "12 h 30 de jeu · Joué hier", ou "Jamais joué".
+ */
+function formatGameStats(game: Game): string {
+  const playtime = formatPlaytime(totalPlaytimeSeconds(game))
+  if (!playtime) return formatLastPlayed(game.lastPlayedAt)
+  // Temps de départ saisi à la main mais jamais lancé : pas de "Jamais joué" à côté
+  return game.lastPlayedAt ? `${playtime} de jeu · ${formatLastPlayed(game.lastPlayedAt)}` : `${playtime} de jeu`
 }
 
 /** Quelle fenêtre modale est ouverte (au plus une à la fois). */
@@ -273,7 +285,12 @@ export default function App() {
         <footer className="details">
           <div>
             <div className="details-title">{selectedGame.name}</div>
-            <div className="hint">{formatLastPlayed(selectedGame.lastPlayedAt)}</div>
+            <div
+              className="hint"
+              title={playtimeFromSteam(selectedGame) ? 'Temps de jeu importé de Steam' : 'Temps de jeu compté par Gamer Room'}
+            >
+              {formatGameStats(selectedGame)}
+            </div>
           </div>
           <div className="details-actions">
             <button className="btn btn-primary" onClick={() => launch(selectedGame)} disabled={running.running}>

@@ -48,6 +48,16 @@ export interface Game {
    * Absent = choix automatique (voir shouldSkipLauncher dans shared/launch.ts).
    */
   skipLauncher?: boolean
+  /**
+   * Temps de jeu compté par Gamer Room, en secondes (voir playtimeTracker.ts).
+   * Comprend la valeur de départ choisie dans l'écran "Modifier". Absent = 0.
+   */
+  playtimeSeconds?: number
+  /**
+   * Jeux Steam : temps de jeu lu dans les fichiers de Steam, en minutes (voir steamPlaytime.ts).
+   * Absent ou null = pas encore lu (on affiche alors le temps compté par Gamer Room).
+   */
+  steamPlaytimeMinutes?: number | null
 }
 
 export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam'
@@ -63,7 +73,7 @@ export interface SteamGameEntry {
 }
 
 /** Les champs qu'on peut modifier depuis l'écran "Modifier". */
-export type GamePatch = Partial<Pick<Game, 'name' | 'args' | 'forceFullscreen' | 'skipLauncher'>>
+export type GamePatch = Partial<Pick<Game, 'name' | 'args' | 'forceFullscreen' | 'skipLauncher' | 'playtimeSeconds'>>
 
 /** Paramètres de l'application (stockés localement, jamais dans le dépôt Git). */
 export interface Settings {
@@ -73,6 +83,12 @@ export interface Settings {
   killShortcut: string
   /** Démarrer le hub en plein écran (façon Big Picture) ? */
   startFullscreen: boolean
+  /**
+   * Compter le temps de jeu même quand le jeu n'est pas lancé depuis Gamer Room ?
+   * Si oui : Gamer Room démarre avec Windows, et la croix du hub la cache près de l'horloge
+   * au lieu de la quitter (voir background.ts).
+   */
+  trackOutsideApp: boolean
 }
 
 /** Un résultat de recherche SteamGridDB (un jeu). */
