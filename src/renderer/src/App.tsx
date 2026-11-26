@@ -6,6 +6,8 @@ import GameEditor from './components/GameEditor'
 import CoverPicker from './components/CoverPicker'
 import SettingsPanel from './components/SettingsPanel'
 import UpdateBanner from './components/UpdateBanner'
+import LoadingScreen from './components/LoadingScreen'
+import SteamImport from './components/SteamImport'
 import type { NavAction } from './input/actions'
 import { useKeyboard } from './input/useKeyboard'
 import { useGamepad } from './input/useGamepad'
@@ -32,6 +34,7 @@ type ModalState =
   | { kind: 'edit'; gameId: string }
   | { kind: 'cover'; gameId: string; results?: SgdbGame[] }
   | { kind: 'settings' }
+  | { kind: 'steam' }
 
 export default function App() {
   const [games, setGames] = useState<Game[]>([])
@@ -47,12 +50,20 @@ export default function App() {
   // --- Chargement initial + écoute de l'état "jeu en cours" ---
   useEffect(() => {
     window.api.getGames().then(setGames)
-    return window.api.onRunningState((state) => {
+    // Un jeu corrigé en arrière-plan au démarrage (ex. "Longshot" → son vrai nom et sa jaquette)
+    const stopGameUpdates = window.api.onGameUpdated(replaceGame)
+    const stopRunning = window.api.onRunningState((state) => {
       setRunning(state)
       if (state.message) showToast(state.message)
+      // Le lancement a appris quelque chose (vrai nom, jaquette…) : on met le jeu à jour
+      if (state.game) replaceGame(state.game)
       // Quand un jeu se ferme, on recharge la liste pour avoir la date de dernier lancement à jour
       if (!state.running) window.api.getGames().then(setGames)
     })
+    return () => {
+      stopGameUpdates()
+      stopRunning()
+    }
   }, [])
 
   // Le toast disparaît tout seul après 4 s
@@ -99,15 +110,19 @@ export default function App() {
     }
   }
 
-  /** Recherche automatique de jaquette après un ajout. */
-  const findCover = async (game: Game): Promise<void> => {
+  /**
+   * Recherche automatique de jaquette après un ajout.
+   * `askIfUnsure` : ouvrir la fenêtre Jaquette quand plusieurs jeux correspondent
+   * (désactivé pour l'import Steam de plusieurs jeux d'un coup).
+   */
+  const findCover = async (game: Game, askIfUnsure = true): Promise<void> => {
     const result = await window.api.sgdbAutoCover(game.id)
     switch (result.status) {
       case 'applied':
         replaceGame(result.game)
         break
       case 'multiple':
-        setModal({ kind: 'cover', gameId: game.id, results: result.results })
+        if (askIfUnsure) setModal({ kind: 'cover', gameId: game.id, results: result.results })
         break
       case 'no-key':
         showToast('Astuce : ajoute ta clé SteamGridDB dans les Paramètres pour avoir les jaquettes.')
@@ -123,6 +138,15 @@ export default function App() {
   const pickAndAdd = async (): Promise<void> => {
     const path = await window.api.pickExecutable()
     if (path) await addPaths([path])
+  }
+
+  /** Jeux Steam ajoutés depuis la fenêtre d'import : on les affiche, puis on cherche leurs jaquettes. */
+  const onSteamAdded = async (added: Game[]): Promise<void> => {
+    setModal(null)
+    if (added.length === 0) return
+    setGames((list) => [...list, ...added])
+    showToast(`${added.length} jeu${added.length > 1 ? 'x' : ''} Steam ajouté${added.length > 1 ? 's' : ''}`)
+    for (const game of added) await findCover(game, added.length === 1)
   }
 
   // --- Navigation (clavier + manette) ---
@@ -224,6 +248,9 @@ export default function App() {
         <button className="btn" onClick={pickAndAdd}>
           + Ajouter
         </button>
+        <button className="btn" onClick={() => setModal({ kind: 'steam' })} title="Ajouter des jeux Steam installés">
+          + Jeux Steam
+        </button>
         <button className="btn" onClick={() => setModal({ kind: 'settings' })}>
           Paramètres
         </button>
@@ -266,7 +293,16 @@ export default function App() {
         </footer>
       )}
 
-      {running.running && (
+      {/* Écran de chargement : entre le clic sur Jouer et l'ouverture du jeu */}
+      {running.running && running.phase !== 'playing' && (
+        <LoadingScreen
+          game={games.find((g) => g.id === running.gameId) ?? running.game}
+          phase={running.phase}
+          onCancel={() => window.api.killGame()}
+        />
+      )}
+
+      {running.running && running.phase === 'playing' && (
         <div className="running-overlay">
           <p>Jeu en cours…</p>
           <button className="btn btn-danger" onClick={() => window.api.killGame()}>
@@ -309,6 +345,7 @@ export default function App() {
         />
       )}
       {modal?.kind === 'settings' && <SettingsPanel ref={modalRef} onClose={() => setModal(null)} onSaved={() => {}} />}
+      {modal?.kind === 'steam' && <SteamImport ref={modalRef} onClose={() => setModal(null)} onAdded={onSteamAdded} />}
     </div>
   )
 }

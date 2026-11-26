@@ -5,10 +5,12 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import { basename, dirname, extname } from 'node:path'
 import { shell } from 'electron'
-import type { Game, GamePatch } from '@shared/types'
+import type { Game, GamePatch, SteamGameEntry } from '@shared/types'
 import { readJson, writeJson } from './jsonStore'
 import { coverPath } from './covers'
 import { readExeInfo } from './exeInfo'
+import { detectLaunchKind } from './launcherDetect'
+import { removeRunAsAdmin } from './compatFlags'
 
 const FILE = 'library.json'
 
@@ -46,7 +48,7 @@ function resolveShortcut(path: string): { target: string; args: string; cwd: str
 }
 
 /** Transforme "my_super-game.exe" en "my super game" (nom proposé par défaut). */
-function guessName(path: string): string {
+export function guessName(path: string): string {
   return basename(path, extname(path)).replace(/[_\-.]+/g, ' ').trim()
 }
 
@@ -80,6 +82,12 @@ export function addGameFromPath(path: string): Game {
     throw new Error(`Fichier introuvable : ${exePath}`)
   }
 
+  const info = readExeInfo(exePath)
+  // Le jeu lui-même, un launcher ou un relais ? (voir launcherDetect.ts)
+  const launch = detectLaunchKind(exePath, info)
+  // « Exécuter en tant qu'administrateur » empêche le hub de lancer le jeu : on décoche l'option
+  removeRunAsAdmin(exePath)
+  removeRunAsAdmin(launch.realExePath)
   const game: Game = {
     id: randomUUID(),
     name,
@@ -91,12 +99,60 @@ export function addGameFromPath(path: string): Game {
     forceFullscreen: true,
     addedAt: new Date().toISOString(),
     lastPlayedAt: null,
-    // Éditeur lu dans la carte d'identité du .exe (pour la future fiche d'infos du jeu)
-    publisher: readExeInfo(exePath).publisher
+    // Éditeur lu dans la carte d'identité du .exe (pour la future fiche d'infos du jeu).
+    // Pour un launcher, on préfère l'éditeur du vrai jeu.
+    publisher: (launch.realExePath && readExeInfo(launch.realExePath).publisher) || info.publisher,
+    launchKind: launch.kind,
+    realExePath: launch.realExePath,
+    gameFolder: launch.gameFolder
   }
   load().push(game)
   save()
   return game
+}
+
+/**
+ * Pour les jeux ajoutés avant la détection des launchers : on la fait maintenant
+ * (appelé juste avant le lancement). Renvoie le jeu à jour.
+ */
+export function ensureLaunchInfo(game: Game): Game {
+  if (game.launchKind) return game
+  const launch = detectLaunchKind(game.exePath)
+  return updateGame(game.id, {
+    launchKind: launch.kind,
+    realExePath: launch.realExePath,
+    gameFolder: launch.gameFolder
+  })
+}
+
+/** Ajoute des jeux Steam (choisis dans la fenêtre d'import). Les jeux déjà présents sont ignorés. */
+export function addSteamGames(entries: SteamGameEntry[], steamExe: string): Game[] {
+  const added: Game[] = []
+  for (const entry of entries) {
+    if (load().some((g) => g.steamAppId === entry.appId)) continue
+    const game: Game = {
+      id: randomUUID(),
+      name: entry.name,
+      // On demande à Steam de lancer le jeu : steam.exe -applaunch <numéro du jeu>
+      exePath: steamExe,
+      args: `-applaunch ${entry.appId}`,
+      workingDir: dirname(steamExe),
+      coverFile: null,
+      steamGridDbId: null,
+      forceFullscreen: true,
+      addedAt: new Date().toISOString(),
+      lastPlayedAt: null,
+      publisher: null, // appris au premier lancement (carte d'identité du vrai .exe)
+      launchKind: 'steam',
+      realExePath: null,
+      gameFolder: entry.installDir,
+      steamAppId: entry.appId
+    }
+    load().push(game)
+    added.push(game)
+  }
+  save()
+  return added
 }
 
 /** Modifie un jeu (nom, arguments, option plein écran) et renvoie la version à jour. */
