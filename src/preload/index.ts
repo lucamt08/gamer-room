@@ -4,7 +4,16 @@
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC } from '@shared/ipc'
-import type { AutoCoverResult, Game, GamePatch, RunningState, SgdbGame, SgdbGrid, Settings, UpdateStatus } from '@shared/types'
+import type {
+  AutoCoverResult,
+  Game,
+  GamePatch,
+  RunningState,
+  SgdbGrid,
+  SgdbSearchResult,
+  Settings,
+  UpdateStatus
+} from '@shared/types'
 
 /** S'abonne à un message envoyé par le main. Renvoie une fonction pour se désabonner. */
 function listen<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -29,7 +38,8 @@ const api = {
   onRunningState: (cb: (state: RunningState) => void) => listen(IPC.runningState, cb),
 
   // --- SteamGridDB ---
-  sgdbSearch: (term: string): Promise<SgdbGame[]> => ipcRenderer.invoke(IPC.sgdbSearch, term),
+  /** Recherche un jeu ; si le nom ne donne rien, essaie des orthographes corrigées. */
+  sgdbSearch: (term: string): Promise<SgdbSearchResult> => ipcRenderer.invoke(IPC.sgdbSearch, term),
   sgdbGrids: (sgdbId: number): Promise<SgdbGrid[]> => ipcRenderer.invoke(IPC.sgdbGrids, sgdbId),
   sgdbSetCover: (gameId: string, url: string, sgdbId: number): Promise<Game> =>
     ipcRenderer.invoke(IPC.sgdbSetCover, gameId, url, sgdbId),

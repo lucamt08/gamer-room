@@ -46,7 +46,8 @@ export function registerIpcHandlers(hub: BrowserWindow): void {
   ipcMain.handle(IPC.killGame, () => killRunningGame())
 
   // --- SteamGridDB ---
-  ipcMain.handle(IPC.sgdbSearch, (_event, term: string) => sgdb.searchGames(term))
+  // Recherche avec correction automatique du nom si rien n'est trouvé
+  ipcMain.handle(IPC.sgdbSearch, (_event, term: string) => sgdb.smartSearch(term))
   ipcMain.handle(IPC.sgdbGrids, (_event, sgdbId: number) => sgdb.getGrids(sgdbId))
   ipcMain.handle(IPC.sgdbSetCover, (_event, gameId: string, url: string, sgdbId: number) =>
     sgdb.setCover(gameId, url, sgdbId)

@@ -5,10 +5,11 @@
 // La clé est lue depuis les paramètres locaux (settings.ts), jamais depuis le code.
 
 import { net } from 'electron'
-import type { AutoCoverResult, Game, SgdbGame, SgdbGrid } from '@shared/types'
+import type { AutoCoverResult, Game, SgdbGame, SgdbGrid, SgdbSearchResult } from '@shared/types'
 import { getSettings } from './settings'
 import { downloadCover, coverPath } from './covers'
 import { getGame, updateGame } from './library'
+import { isSameName, nameVariants, rankBySimilarity } from './gameNames'
 import { rmSync } from 'node:fs'
 
 const API = 'https://www.steamgriddb.com/api/v2'
@@ -42,6 +43,22 @@ export async function searchGames(term: string): Promise<SgdbGame[]> {
   }))
 }
 
+/**
+ * Recherche "intelligente" : si le nom tapé ne donne rien (faute de frappe, nom de fichier,
+ * abréviation, mention d'édition...), on essaie des orthographes corrigées une par une
+ * (voir gameNames.ts) jusqu'à trouver des résultats, triés du plus ressemblant au moins ressemblant.
+ */
+export async function smartSearch(term: string): Promise<SgdbSearchResult> {
+  const direct = await searchGames(term)
+  if (direct.length > 0) return { results: direct, correctedTerm: null }
+
+  for (const variant of nameVariants(term)) {
+    const results = await searchGames(variant)
+    if (results.length > 0) return { results: rankBySimilarity(term, results), correctedTerm: variant }
+  }
+  return { results: [], correctedTerm: null }
+}
+
 /** Récupère les jaquettes au format boîte verticale (600x900) d'un jeu SteamGridDB. */
 export async function getGrids(sgdbGameId: number): Promise<SgdbGrid[]> {
   const data = await call<Array<{ id: number; url: string; thumb: string; width: number; height: number }>>(
@@ -61,9 +78,11 @@ export async function setCover(gameId: string, gridUrl: string, sgdbGameId: numb
 }
 
 /**
- * Recherche automatique après l'ajout d'un jeu :
- *  - 1 seul résultat → on applique directement sa première jaquette ;
- *  - plusieurs résultats → on renvoie la liste, l'interface demande à l'utilisateur ;
+ * Recherche automatique après l'ajout d'un jeu (avec correction du nom si besoin) :
+ *  - le même nom, à la mise en forme près ("HorizonForbiddenWest" = "Horizon Forbidden West"),
+ *    ou un seul résultat pour le nom exact → on applique directement sa première jaquette,
+ *    et on renomme le jeu avec son nom officiel s'il était écrit autrement ;
+ *  - plusieurs résultats possibles → on renvoie la liste, l'interface demande à l'utilisateur ;
  *  - aucun résultat / pas de clé → la boîte générique reste affichée.
  */
 export async function autoCover(gameId: string): Promise<AutoCoverResult> {
@@ -72,17 +91,21 @@ export async function autoCover(gameId: string): Promise<AutoCoverResult> {
   if (!getSettings().steamGridDbApiKey.trim()) return { status: 'no-key' }
 
   try {
-    const results = await searchGames(game.name)
+    const { results, correctedTerm } = await smartSearch(game.name)
     if (results.length === 0) return { status: 'none' }
 
-    // Correspondance exacte du nom (sans tenir compte des majuscules) = on considère que c'est le bon jeu
-    const exact = results.filter((r) => r.name.toLowerCase() === game.name.toLowerCase())
-    const match = results.length === 1 ? results[0] : exact.length === 1 ? exact[0] : null
+    const exact = results.filter((r) => isSameName(r.name, game.name))
+    // Un seul résultat ne suffit que si le nom n'a pas été corrigé (sinon on laisse l'utilisateur vérifier)
+    const match = exact.length === 1 ? exact[0] : !correctedTerm && results.length === 1 ? results[0] : null
     if (!match) return { status: 'multiple', results }
 
     const grids = await getGrids(match.id)
     if (grids.length === 0) return { status: 'none' }
-    const updated = await setCover(gameId, grids[0].url, match.id)
+    let updated = await setCover(gameId, grids[0].url, match.id)
+    // Nom officiel : "HorizonForbiddenWest" devient "Horizon Forbidden West"
+    if (match.name !== game.name && isSameName(match.name, game.name)) {
+      updated = updateGame(gameId, { name: match.name })
+    }
     return { status: 'applied', game: updated }
   } catch (error) {
     return { status: 'error', message: (error as Error).message }
