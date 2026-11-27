@@ -22,6 +22,7 @@ export const IPC = {
   pcAddFolder: 'pc:add-folder',
 
   steamInstallProgress: 'steam:install-progress', // main → renderer (téléchargements en cours)
+  gameInfo: 'game:info', // fiche du jeu (Steam ou Wikipédia) + succès Steam (panneau de détails)
 
   // Lancement
   launchGame: 'game:launch',

@@ -2,7 +2,8 @@
 // L'interface n'a accès QU'À ces fonctions (voir preload/index.ts).
 
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import type { GamePatch, Settings } from '@shared/types'
+import type { GameInfo, GamePatch, Settings } from '@shared/types'
+import { getGameInfo } from './gameInfo'
 import { IPC } from '@shared/ipc'
 import * as library from './library'
 import * as sgdb from './steamgriddb'
@@ -114,6 +115,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.killGame, () => killRunningGame())
   // Jeu Steam, Epic ou Riot pas installé : ouvre la fenêtre d'installation du magasin
   ipcMain.handle(IPC.installGame, (_event, id: string) => installGame(id))
+
+  // Panneau de détails : fiche du jeu (page Steam ou Wikipédia, en cache) + succès Steam (voir gameInfo.ts)
+  ipcMain.handle(IPC.gameInfo, async (_event, id: string): Promise<GameInfo> => {
+    const game = library.getGame(id)
+    return game ? getGameInfo(game) : { sheet: null, achievements: null }
+  })
 
   // --- SteamGridDB ---
   // Recherche avec correction automatique du nom si rien n'est trouvé

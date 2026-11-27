@@ -19,6 +19,7 @@ const BUTTONS: Record<number, NavAction> = {
   1: 'back',
   2: 'cover',
   3: 'edit',
+  5: 'details', // RB / R1
   8: 'add',
   9: 'settings',
   12: 'up',

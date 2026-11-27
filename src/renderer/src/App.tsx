@@ -13,6 +13,7 @@ import UpdateBanner from './components/UpdateBanner'
 import LoadingScreen from './components/LoadingScreen'
 import SteamImport from './components/SteamImport'
 import PcImport from './components/PcImport'
+import GameDetails from './components/GameDetails'
 import type { NavAction } from './input/actions'
 import { useKeyboard } from './input/useKeyboard'
 import { useGamepad } from './input/useGamepad'
@@ -76,8 +77,12 @@ export default function App() {
   // Réglages de défilement (molette, glisser, manette), mis à jour quand on enregistre les Paramètres
   const [scroll, setScroll] = useState<ScrollSettings>(DEFAULT_SCROLL_SETTINGS)
 
+  // Panneau de détails ouvert (clic sur une boîte, touche I, bouton RB) : voir GameDetails.tsx
+  const [detailsOpen, setDetailsOpen] = useState(false)
+
   const shelfRef = useRef<HTMLDivElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
+  const detailsRef = useRef<HTMLDivElement>(null)
 
   // --- Chargement initial + écoute de l'état "jeu en cours" ---
   useEffect(() => {
@@ -209,9 +214,45 @@ export default function App() {
       return
     }
 
-    // 2. Sinon, on navigue dans l'étagère
-    const columns = countColumns(shelfRef.current)
     const last = shelfGames.length - 1
+
+    // 2. Panneau de détails ouvert : haut/bas font défiler les infos, gauche/droite changent de jeu
+    if (detailsOpen) {
+      switch (action) {
+        case 'back':
+        case 'details':
+          setDetailsOpen(false)
+          break
+        case 'up':
+        case 'down':
+          detailsRef.current?.scrollBy({ top: action === 'up' ? -200 : 200, behavior: 'smooth' })
+          break
+        case 'left':
+          setSelected((i) => Math.max(0, i - 1))
+          break
+        case 'right':
+          setSelected((i) => Math.min(last, i + 1))
+          break
+        case 'confirm':
+          launch(selectedGame)
+          break
+        case 'edit':
+          if (selectedGame) setModal({ kind: 'edit', gameId: selectedGame.id })
+          break
+        case 'cover':
+          if (selectedGame) setModal({ kind: 'cover', gameId: selectedGame.id })
+          break
+        case 'settings':
+          setModal({ kind: 'settings' })
+          break
+        case 'add':
+          break
+      }
+      return
+    }
+
+    // 3. Sinon, on navigue dans l'étagère
+    const columns = countColumns(shelfRef.current)
     switch (action) {
       case 'left':
         setSelected((i) => Math.max(0, i - 1))
@@ -240,10 +281,18 @@ export default function App() {
       case 'add':
         pickAndAdd()
         break
+      case 'details':
+        if (selectedGame) setDetailsOpen(true)
+        break
       case 'back':
         break
     }
   }
+
+  // Plus de jeu sélectionné (bibliothèque vide) : on referme le panneau de détails
+  useEffect(() => {
+    if (!selectedGame) setDetailsOpen(false)
+  }, [selectedGame])
 
   const inputEnabled = !running.running
   useKeyboard(onAction, inputEnabled)
@@ -334,6 +383,10 @@ export default function App() {
           games={shelfGames}
           selectedIndex={selected}
           onSelect={setSelected}
+          onOpen={(index) => {
+            setSelected(index)
+            setDetailsOpen(true)
+          }}
           scroll={scroll}
         />
       </main>
@@ -378,10 +431,25 @@ export default function App() {
             </button>
           </div>
           <div className="details-help">
-            <kbd>Entrée</kbd>/<kbd>A</kbd> jouer · <kbd>E</kbd>/<kbd>Y</kbd> modifier · <kbd>C</kbd>/<kbd>X</kbd>{' '}
+            <kbd>Entrée</kbd>/<kbd>A</kbd> jouer · <kbd>I</kbd>/<kbd>RB</kbd> détails · <kbd>E</kbd>/<kbd>Y</kbd> modifier · <kbd>C</kbd>/<kbd>X</kbd>{' '}
             jaquette · <kbd>P</kbd>/<kbd>Start</kbd> paramètres · <kbd>F11</kbd> plein écran
           </div>
         </footer>
+      )}
+
+      {/* Panneau de détails : le jeu à gauche, ses infos (succès, fiche Steam…) à droite */}
+      {detailsOpen && selectedGame && (
+        <GameDetails
+          ref={detailsRef}
+          game={selectedGame}
+          otherCopies={otherCopies.get(selectedGame.id) ?? []}
+          stats={formatGameStats(selectedGame, installProgress[selectedGame.id])}
+          running={running.running}
+          onClose={() => setDetailsOpen(false)}
+          onPlay={() => launch(selectedGame)}
+          onEdit={() => setModal({ kind: 'edit', gameId: selectedGame.id })}
+          onCover={() => setModal({ kind: 'cover', gameId: selectedGame.id })}
+        />
       )}
 
       {/* Écran de chargement : entre le clic sur Jouer et l'ouverture du jeu */}

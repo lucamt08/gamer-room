@@ -294,3 +294,62 @@ export interface FwsGameInfo {
   /** Clé du correctif reconnu automatiquement pour ce jeu, ou null. */
   detectedKey: string | null
 }
+
+/** Un succès (trophée) Steam d'un jeu. */
+export interface SteamAchievement {
+  /** Identifiant chez Steam, ex. "CHARMED". */
+  id: string
+  /** Nom affiché (en français si le jeu le traduit). */
+  name: string
+  description: string
+  /** Succès caché tant qu'il n'est pas débloqué (sa description n'est pas montrée). */
+  hidden: boolean
+  /** Date de déblocage (format ISO), ou null si pas encore débloqué. */
+  unlockedAt: string | null
+  /** Adresse de l'icône (couleur si débloqué, grisée sinon). */
+  iconUrl: string
+  /** Pourcentage des joueurs qui l'ont débloqué (ex. 76.7), ou null si inconnu (hors ligne). */
+  globalPercent: number | null
+}
+
+/**
+ * La fiche d'un jeu affichée dans le panneau de détails, au MÊME format quelle que soit sa source :
+ *  - 'steam'     : la page Steam du jeu (jeu Steam, ou jeu d'ailleurs trouvé sur Steam par son nom) ;
+ *  - 'wikipedia' : résumé Wikipédia + infos Wikidata (jeux absents de Steam : VALORANT, Fortnite…).
+ * Un champ vide (liste vide, null) n'est simplement pas affiché. Voir gameInfo.ts.
+ */
+export interface GameSheet {
+  source: 'steam' | 'wikipedia'
+  /** Lien vers la page d'origine (page Steam ou article Wikipédia). */
+  sourceUrl: string | null
+  shortDescription: string
+  developers: string[]
+  publishers: string[]
+  /** Date de sortie, ex. "24 févr. 2017". */
+  releaseDate: string
+  genres: string[]
+  /** Modes de jeu, ex. ["Solo", "Multijoueur"]. */
+  modes: string[]
+  /** Plateformes (Wikidata seulement), ex. ["Windows", "PlayStation 5"]. */
+  platforms: string[]
+  /** Série de jeux (Wikidata seulement), ex. "Alan Wake". */
+  series: string | null
+  /** Note Metacritic (sur 100), ou null. */
+  metacritic: number | null
+  /** Manette (Steam seulement) : "full" (complète), "partial" (partielle), ou null (pas indiqué). */
+  controllerSupport: 'full' | 'partial' | null
+  /** Nombre d'évaluations de joueurs sur Steam, ou null. */
+  recommendations: number | null
+  /** Captures d'écran (petites images, Steam seulement). */
+  screenshots: string[]
+  /** Grande image de fond (page Steam), ou null. */
+  background: string | null
+}
+
+/** Ce que le panneau de détails affiche en plus des infos du PC. */
+export interface GameInfo {
+  /** La fiche du jeu, ou null (jeu introuvable, ou pas d'Internet la première fois). */
+  sheet: GameSheet | null
+  /** Succès (jeux Steam seulement), ou null. */
+  achievements: SteamAchievement[] | null
+}

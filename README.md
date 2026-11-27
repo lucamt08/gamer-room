@@ -9,6 +9,14 @@ avec leurs jaquettes, et se lancent **automatiquement en plein écran sans bordu
 ## ✨ Fonctionnalités
 
 - **Ajouter un jeu / programme** : bouton « + Ajouter » ou **glisser-déposer** un `.exe` ou un raccourci `.lnk` dans la fenêtre.
+- **« + Jeux Steam »** : toute ta bibliothèque Steam, même les jeux non installés (bouton « Installer »).
+- **« + Jeux du PC »** : jeux **Epic Games, Battle.net, GOG, Riot Games** (installés ou non) et jeux sans launcher
+  trouvés sur le PC. Les jeux lancés par un launcher démarrent directement, le launcher reste en arrière-plan.
+- **Pas de doublons** : un jeu présent sur plusieurs launchers n'a qu'une boîte. Chaque jeu indique d'où il vient
+  (Steam, Epic Games… ou jeu local).
+- **Panneau de détails** (clic sur un jeu) : description, développeur, genres, note… depuis la page Steam du jeu,
+  ou Wikipédia s'il n'est pas sur Steam, et les **succès Steam** débloqués avec leur rareté.
+- **Temps de jeu** compté par Gamer Room (et repris de Steam pour les jeux Steam), taille des jeux.
 - **Boîtes de jeu en 3D légère** avec jaquette et tranche visible.
 - **Jaquettes automatiques** via [SteamGridDB](https://www.steamgriddb.com) (clé API gratuite requise, voir plus bas).
 - **Plein écran forcé** : au lancement, la fenêtre du jeu est passée en plein écran fenêtré sans bordure sur son écran
@@ -52,6 +60,7 @@ Elle n'est **jamais** envoyée sur GitHub. Chacun utilise sa propre clé.
 | ----------------------- | -------------- | ------------ | ------------------- |
 | Se déplacer             | Flèches        | Stick / croix | Stick / croix      |
 | Jouer                   | Entrée         | A            | Croix               |
+| Détails du jeu (succès, fiche) | I ou clic sur le jeu | RB | R1           |
 | Retour / fermer         | Échap          | B            | Rond                |
 | Modifier le jeu         | E              | Y            | Triangle            |
 | Changer la jaquette     | C              | X            | Carré               |
@@ -127,21 +136,12 @@ puis **créer le tag** qui déclenche la publication.
 
 ```
 src/
-  main/            Processus principal (Node.js) : fenêtres, fichiers, lancement des jeux
-    index.ts         Point d'entrée : crée la fenêtre du hub
-    windowManager.ts ⚙️ Tout le code Win32 (trouver la fenêtre du jeu, plein écran sans bordure)
-    gameLauncher.ts  Lance un jeu, cache/réaffiche le hub, détecte la fin du jeu
-    library.ts       Liste des jeux (library.json)
-    settings.ts      Paramètres (settings.json, contient la clé API)
-    steamgriddb.ts   Appels à l'API SteamGridDB
-    covers.ts        Cache des jaquettes + adresse cover://
-    updater.ts       Mise à jour automatique
-    shortcuts.ts     Raccourci global de fermeture forcée
-    ipc.ts           Fonctions appelables depuis l'interface
-  preload/         Le "pont" sécurisé entre l'interface et le main (window.api)
-  renderer/        L'interface React
-    src/App.tsx      Écran principal
-    src/components/  Boîtes, étagère, fenêtres (Modifier, Jaquette, Paramètres)
-    src/input/       Clavier + manette
-  shared/          Types communs au main et à l'interface
+  main/       Processus principal (Node.js) : fichiers, launchers, lancement des jeux, code Windows
+    pcGames/    « + Jeux du PC » : un fichier par launcher (Epic, Battle.net, GOG, Riot…)
+  preload/    Le "pont" sécurisé entre l'interface et le main (window.api)
+  renderer/   L'interface React (App.tsx, components/, input/ clavier + manette)
+  shared/     Types et règles communs au main et à l'interface
 ```
+
+Le détail fichier par fichier, les règles du projet et les points fragiles sont dans **[CLAUDE.md](CLAUDE.md)**
+(c'est aussi ce que lit Claude Code au début de chaque session).

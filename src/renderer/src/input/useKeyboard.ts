@@ -12,7 +12,8 @@ const KEYS: Record<string, NavAction> = {
   e: 'edit',
   c: 'cover',
   p: 'settings',
-  a: 'add'
+  a: 'add',
+  i: 'details'
 }
 
 /** Vrai si l'utilisateur est en train d'écrire dans un champ texte. */

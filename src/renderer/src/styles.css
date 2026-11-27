@@ -1487,3 +1487,237 @@ html.overlay-window body {
     opacity: 0;
   }
 }
+
+/* ==========================================================================
+   Panneau de détails d'un jeu (GameDetails.tsx) : le jeu à gauche, ses infos à droite
+   ========================================================================== */
+.gd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25; /* au-dessus de l'étagère, sous les fenêtres (30), l'écran de chargement (30) et les messages (40) */
+  display: grid;
+  grid-template-columns: minmax(260px, 36%) 1fr;
+  gap: 4vw;
+  padding: 72px 5vw 40px;
+  background: rgba(5, 7, 12, 0.94);
+  animation: gd-fade 0.25s ease-out;
+}
+
+/* Image de fond de la page Steam (ou jaquette floutée), très assombrie */
+.gd-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.35;
+  mask-image: linear-gradient(to bottom, black 30%, transparent 100%);
+}
+.gd-bg.blurred {
+  filter: blur(40px) saturate(1.3);
+  transform: scale(1.2);
+  opacity: 0.25;
+}
+
+.gd-back {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+}
+
+/* À gauche : la jaquette arrive du centre de l'écran et glisse vers la gauche */
+.gd-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  align-self: center;
+  animation: gd-slide-left 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.gd-cover {
+  width: min(100%, clamp(220px, 46vh, 440px));
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  font-size: 96px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.gd-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gd-left-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* À droite : les infos, qu'on peut faire défiler */
+.gd-right {
+  overflow-y: auto;
+  padding-right: 12px;
+  animation: gd-slide-right 0.45s ease-out;
+}
+
+.gd-title {
+  margin: 0 0 6px;
+  font-size: clamp(28px, 4.4vh, 46px);
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.gd-right .details-origin {
+  justify-content: flex-start;
+}
+
+.gd-stats {
+  margin: 8px 0 18px;
+  color: var(--muted);
+}
+
+.gd-desc {
+  font-size: 16px;
+  line-height: 1.55;
+  max-width: 70ch;
+  margin: 0 0 20px;
+}
+
+.gd-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 22px;
+}
+.gd-facts dt {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.gd-facts dd {
+  margin: 2px 0 0;
+}
+
+.gd-shots {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-bottom: 26px;
+  padding-bottom: 6px;
+}
+.gd-shots img {
+  height: 120px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.gd-section h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+.gd-ach-count {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.gd-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  margin-bottom: 14px;
+  max-width: 520px;
+}
+.gd-progress > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.gd-ach-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gd-ach {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  opacity: 0.6;
+}
+.gd-ach.unlocked {
+  background: rgba(111, 168, 255, 0.08);
+  opacity: 1;
+}
+
+.gd-ach-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: var(--panel);
+}
+
+.gd-ach-text {
+  flex: 1;
+  min-width: 0;
+}
+.gd-ach-name {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gd-ach-desc {
+  font-size: 13px;
+  color: var(--muted);
+}
+.gd-ach-rare {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 196, 0, 0.18);
+  color: #ffd45c;
+}
+
+.gd-ach-side {
+  text-align: right;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@keyframes gd-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes gd-slide-left {
+  from { transform: translateX(40vw) scale(0.9); }
+  to { transform: none; }
+}
+@keyframes gd-slide-right {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* « Source : page Steam / Wikipédia » sous la description */
+.gd-source {
+  margin: -12px 0 20px;
+  font-size: 12px;
+  color: var(--muted);
+}
