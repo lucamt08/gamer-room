@@ -69,7 +69,7 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   ipc.ts           Tous les ipcMain.handle
 src/preload/     contextBridge → window.api (fonctions IPC explicites uniquement)
 src/renderer/    Interface React (App.tsx, components/, input/ clavier+manette)
-  components/GameDetails.tsx Panneau de détails (clic sur une boîte, touche I, bouton RB) : jeu à gauche, fiche + succès à droite
+  components/GameDetails.tsx Panneau de détails (clic sur la boîte du centre, touche I, bouton RB) : jeu à gauche, fiche + succès à droite
 src/shared/      types.ts (types communs) et ipc.ts (noms des canaux IPC)
   launch.ts        Règles de lancement communes (launchedByStore, storeName…)
   duplicates.ts    Doublons (même nom = même jeu : une seule boîte affichée, rien supprimé) + origine du jeu
