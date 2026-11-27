@@ -5,7 +5,7 @@
 //    0 = au centre, de face ; négatif = à gauche ; positif = à droite,
 //  - la boîte du centre pivote en 3D pour "regarder" la souris, avec un reflet
 //    lumineux qui suit le curseur et un éclat de brillance qui balaie la jaquette.
-// Un clic sur une boîte la sélectionne seulement : on lance le jeu avec le bouton « Jouer »
+// Un clic sur une boîte ouvre ses détails (voir GameDetails.tsx) : on lance le jeu avec le bouton « Jouer »
 // sous le carrousel (plus de double-clic : ça provoquait trop de lancements par erreur).
 // Les styles sont dans styles.css (section "Carrousel" et "Boîte de jeu").
 
@@ -106,14 +106,14 @@ export default function GameBox({ game, offset, onSelect }: Props) {
 
   return (
     <div className={`cf-item${selected ? ' selected' : ''}${game.installed === false ? ' not-installed' : ''}`} style={style}>
-      {/* Toute la boîte est cliquable : un clic la sélectionne */}
+      {/* Toute la boîte est cliquable : un clic ouvre ses détails (succès, fiche Steam…) */}
       <div
         ref={tilt.ref}
         className="box-wrap"
         onPointerMove={tilt.onPointerMove}
         onPointerLeave={tilt.onPointerLeave}
         onClick={onSelect}
-        title={selected ? game.name : `${game.name} — clic pour sélectionner`}
+        title={`${game.name} — clic pour voir les détails`}
       >
         {/* Enveloppe qui fait flotter doucement la boîte du centre */}
         <div className="box-float">

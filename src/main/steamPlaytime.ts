@@ -31,7 +31,7 @@ let configFileCheckedAt = 0
 let lastRead: { file: string; modifiedAt: number; data: Map<number, SteamPlaytime> } | null = null
 
 /** Numéro du compte Steam connecté (registre Windows), ou null. */
-function activeAccountId(): string | null {
+export function activeAccountId(): string | null {
   try {
     const output = execFileSync('reg', ['query', 'HKCU\\Software\\Valve\\Steam\\ActiveProcess', '/v', 'ActiveUser'], {
       encoding: 'utf8',

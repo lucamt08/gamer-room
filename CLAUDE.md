@@ -30,16 +30,28 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   background.ts    Option « compter en dehors de l'appli » : icône près de l'horloge + démarrage avec Windows
   playtimeTracker.ts Compteur de temps de jeu (regarde les programmes ouverts toutes les 10 s)
   steamPlaytime.ts Lit le temps de jeu enregistré par Steam (userdata\<compte>\config\localconfig.vdf)
+  steamVdf.ts      Lecteur du format VDF binaire de Valve (appinfo.vdf, fichiers de succès)
   steamAppInfo.ts  Lit le cache de Steam (appinfo.vdf binaire + librarycache) : toute la bibliothèque, même non installée
-  steamInstalls.ts Bouton « Installer » (steam://install) + suivi installé / non installé / téléchargement
+  steamInstalls.ts Bouton « Installer » (Steam, Epic, Battle.net, Riot) + suivi installé / non installé / téléchargement Steam
+  steamAchievements.ts Succès Steam lus sur le PC (appcache\stats\UserGameStats*.bin), sans Internet
+  gameInfo.ts      Fiche du panneau de détails : page Steam → page Steam trouvée par le nom → Wikipédia
+  steamStore.ts    Page Steam d'un jeu (appdetails), rareté des succès, recherche Steam par nom
+  wikiInfo.ts      Fiche Wikipédia + Wikidata (jeux absents de Steam)
+  httpJson.ts      Téléchargement JSON (User-Agent) + cache des fiches (userData\game-info, 7 jours)
   gameSizes.ts     Taille du dossier des jeux non-Steam (en arrière-plan, une fois par jour)
+  knownLaunchers.ts Liste des .exe de launchers connus (jamais « le jeu ») : détection, lancement, temps de jeu
   pcGames/         « + Jeux du PC » : jeux hors Steam
     pcGames.ts       Rassemble les sources, évite les doublons, ajoute les jeux choisis
     epicGames.ts     Jeux Epic installés (.item) et non installés (cache catcache.bin), lien du launcher Epic
     epicInstalls.ts  Suivi installé / non installé des jeux Epic (toutes les 10 s)
     battleNetLaunch.ts Ouvre Battle.net et attend qu'il soit prêt avant de lancer un jeu
-    battleNetGames.ts Jeux Battle.net (product.db, protobuf), lancés par Battle.net.exe --exec
+    battleNetGames.ts Jeux Battle.net (product.db, protobuf) + gratuits / déjà installés un jour (CATALOG), lancés par Battle.net.exe --exec
+    battleNetInstalls.ts Suivi installé / non installé des jeux Battle.net
+    riotGames.ts     Jeux Riot (ProgramData\Riot Games\Metadata + registre), installés ou non
+    riotLaunch.ts    Lance le jeu via l'interface locale du Riot Client (lockfile), voir « Points fragiles »
+    riotInstalls.ts  Suivi installé / non installé des jeux Riot
     gogGames.ts      Jeux GOG (registre), lancés directement
+    registry.ts      Lecture du registre Windows (reg query), utilisé par GOG et Riot
     pcGameDetect.ts  Détection générale des .exe : suspects → exclusions → note « est-ce un jeu ? » → nom
     mainExe.ts       Trouve le .exe principal d'un dossier de jeu
   flawless.ts      Flawless Widescreen : trouve FWS, lit ses correctifs, coche « Fix Enabled » avant le jeu
@@ -57,7 +69,10 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   ipc.ts           Tous les ipcMain.handle
 src/preload/     contextBridge → window.api (fonctions IPC explicites uniquement)
 src/renderer/    Interface React (App.tsx, components/, input/ clavier+manette)
+  components/GameDetails.tsx Panneau de détails (clic sur une boîte, touche I, bouton RB) : jeu à gauche, fiche + succès à droite
 src/shared/      types.ts (types communs) et ipc.ts (noms des canaux IPC)
+  launch.ts        Règles de lancement communes (launchedByStore, storeName…)
+  duplicates.ts    Doublons (même nom = même jeu : une seule boîte affichée, rien supprimé) + origine du jeu
 build/           Icône de l'appli
 .github/workflows/release.yml  Construit et publie l'installateur quand on pousse un tag v*
 ```
@@ -72,6 +87,19 @@ Pour ajouter une fonction appelable depuis l'interface : canal dans `shared/ipc.
 - Sécurité Electron : `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Ne jamais exposer
   `ipcRenderer` ou Node directement à l'interface.
 - Tout nouveau code Win32 va dans `windowManager.ts`.
+- **Toujours une solution générale** : l'appli tourne sur d'autres PC (dossiers différents). Ne jamais coder un chemin
+  en dur : lire où sont les choses dans les fichiers / le registre du launcher, comme les modules de `pcGames/`.
+
+### Ajouter un launcher (modèle : Riot, Battle.net)
+- `pcGames/<launcher>Games.ts` renvoie des `DetectedGame` (installés, et `installed: false` pour les non installés) ;
+  `<launcher>Installs.ts` suit installé / non installé toutes les 10 s (démarré dans `index.ts`).
+- Branchement : `GameSource` (`shared/types.ts`), `findAll()` / `isAlreadyAdded()` / `addPcGames()` dans `pcGames.ts`,
+  section `SECTIONS` de `PcImport.tsx`, `storeName()` (`shared/launch.ts`), `originLabel()` (`shared/duplicates.ts`),
+  `installGame()` (`steamInstalls.ts`).
+- Jeu lancé par son launcher : `launchKind: 'store'`, `exePath`/`args` = commande du launcher, `gameFolder` = dossier
+  du jeu (le jeu est reconnu à son dossier). Ajouter le .exe du launcher dans `knownLaunchers.ts`.
+- Ouvrir un lien de programme (`xxx://`) avec `rundll32.exe url.dll,FileProtocolHandler` ou `shell.openExternal`,
+  jamais avec explorer.exe (il ouvre Documents).
 
 ## Commandes
 
@@ -108,5 +136,17 @@ les applis installées proposent la mise à jour.
 - Le plein écran forcé dépend des jeux : jeux en plein écran exclusif, anti-cheat, launchers (Steam/Epic/Ubisoft)
   qui lancent le jeu via un autre processus, jeux qui se redimensionnent eux-mêmes. Une option par jeu permet
   de désactiver le plein écran forcé.
+- Pendant un lancement, un launcher qui passe devant est remis derrière Gamer Room, une fois par fenêtre
+  (`keepHubInFront` dans `gameLauncher.ts`). Le salon de League of Legends est un launcher (pas de plein écran forcé).
+- **Riot** a désactivé le lancement automatique (`--launch-product` ouvre seulement la page du jeu). `riotLaunch.ts`
+  envoie `POST /product-launcher/v1/products/<produit>/patchlines/<version>` à l'interface locale du Riot Client
+  (port + mot de passe temporaire dans `%LOCALAPPDATA%\Riot Games\Riot Client\Config\lockfile`). Ne jamais utiliser
+  autre chose de cette interface (rien qui touche au compte).
+- **Epic** ne garde pas le temps de jeu sur le PC (seulement sur ses serveurs, avec le compte connecté) : mis de côté.
+  Battle.net ne garde pas non plus la liste des jeux achetés (d'où la liste `CATALOG`).
+- **Fiches de jeux** : la recherche Steam (`storesearch`) ne répond qu'avec un pays (`cc`) ; on n'accepte qu'un nom
+  identique (`gameKey`). Wikidata range beaucoup de noms en langue `mul` ; son numéro Steam (P1733) est parfois faux,
+  ne pas s'y fier. Wikipédia limite à 10 demandes/min sans contact dans le User-Agent (200 avec) : garder l'adresse
+  du projet dans `httpJson.ts`.
 - Les raccourcis `.lnk` vers des URL (`steam://…`) ne sont pas supportés pour l'instant.
 - L'appli n'est pas signée → avertissement SmartScreen à l'installation.

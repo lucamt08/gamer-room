@@ -14,6 +14,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { sub, VdfReader, type Kv } from './steamVdf'
 
 const MAGIC_V28 = 0x07564428
 const MAGIC_V29 = 0x07564429
@@ -26,70 +27,6 @@ export interface SteamAppInfo {
   type: string
   /** Place estimée une fois installé, en octets (0 si inconnue). */
   installBytes: number
-}
-
-type Kv = { [key: string]: string | number | Kv }
-
-/** Lecteur de VDF binaire sur un buffer. */
-class VdfReader {
-  pos = 0
-  constructor(
-    private buf: Buffer,
-    private strings: string[] | null
-  ) {}
-
-  private cString(): string {
-    const end = this.buf.indexOf(0, this.pos)
-    const text = this.buf.toString('utf8', this.pos, end)
-    this.pos = end + 1
-    return text
-  }
-
-  private key(): string {
-    if (!this.strings) return this.cString()
-    const index = this.buf.readUInt32LE(this.pos)
-    this.pos += 4
-    return this.strings[index] ?? ''
-  }
-
-  /** Lit un bloc jusqu'à son octet de fin (8). */
-  block(): Kv {
-    const result: Kv = {}
-    for (;;) {
-      const type = this.buf[this.pos++]
-      if (type === 0x08 || type === undefined) return result
-      const key = this.key()
-      switch (type) {
-        case 0x00:
-          result[key] = this.block()
-          break
-        case 0x01:
-          result[key] = this.cString()
-          break
-        case 0x02:
-          result[key] = this.buf.readInt32LE(this.pos)
-          this.pos += 4
-          break
-        case 0x03:
-          result[key] = this.buf.readFloatLE(this.pos)
-          this.pos += 4
-          break
-        case 0x07:
-        case 0x0a:
-          result[key] = Number(this.buf.readBigUInt64LE(this.pos))
-          this.pos += 8
-          break
-        default:
-          throw new Error(`Type VDF inconnu (${type})`)
-      }
-    }
-  }
-}
-
-/** Sous-bloc d'un bloc VDF, ou null. */
-function sub(kv: Kv | null | undefined, key: string): Kv | null {
-  const value = kv?.[key]
-  return value && typeof value === 'object' ? value : null
 }
 
 /**

@@ -17,6 +17,7 @@ import type {
   SgdbSearchResult,
   Settings,
   SteamGameEntry,
+  GameInfo,
   InstallProgress,
   DetectedGame,
   UpdateStatus
@@ -50,6 +51,8 @@ const api = {
   pcAddFolder: (): Promise<{ games: DetectedGame[]; alreadyAdded: number }> => ipcRenderer.invoke(IPC.pcAddFolder),
   /** Ouvre la fenêtre d'installation du magasin (Steam ou Epic) pour un jeu pas installé. */
   installGame: (id: string): Promise<void> => ipcRenderer.invoke(IPC.installGame, id),
+  /** Panneau de détails : fiche du jeu (page Steam ou Wikipédia) et succès Steam. */
+  gameInfo: (id: string): Promise<GameInfo> => ipcRenderer.invoke(IPC.gameInfo, id),
   /** Avancement des téléchargements Steam en cours (id du jeu → pourcentage). */
   onInstallProgress: (cb: (progress: InstallProgress) => void) => listen(IPC.steamInstallProgress, cb),
   /** Chemin complet d'un fichier glissé-déposé dans la fenêtre. */

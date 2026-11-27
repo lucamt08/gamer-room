@@ -13,3 +13,4 @@ export type NavAction =
   | 'cover' // touche C / bouton X (carré)
   | 'settings' // touche P / bouton Start (Options)
   | 'add' // touche A / bouton Select (Share)
+  | 'details' // touche I / bouton RB (R1) : panneau de détails du jeu (succès, fiche Steam…)
