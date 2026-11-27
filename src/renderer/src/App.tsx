@@ -56,6 +56,10 @@ function formatGameStats(game: Game, installPercent: number | undefined): string
   return parts.join(' · ')
 }
 
+/** Les boutons sous le jeu sélectionné, dans l'ordre (la manette s'y déplace avec gauche / droite). */
+const FOOTER_BUTTONS = ['play', 'infos', 'edit', 'cover'] as const
+type FooterButton = (typeof FOOTER_BUTTONS)[number]
+
 /** Quelle fenêtre modale est ouverte (au plus une à la fois). */
 type ModalState =
   | null
@@ -79,6 +83,8 @@ export default function App() {
 
   // Panneau de détails ouvert (clic sur une boîte, touche I, bouton RB) : voir GameDetails.tsx
   const [detailsOpen, setDetailsOpen] = useState(false)
+  // Bouton choisi au clavier / à la manette sous le jeu (index dans FOOTER_BUTTONS), ou null = on est sur l'étagère
+  const [footerFocus, setFooterFocus] = useState<number | null>(null)
 
   const shelfRef = useRef<HTMLDivElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -205,6 +211,26 @@ export default function App() {
     for (const game of added) await findCover(game, added.length === 1)
   }
 
+  /** Un bouton sous le jeu : clic à la souris, ou A / Entrée quand il est choisi à la manette / au clavier. */
+  const runFooterButton = (button: FooterButton): void => {
+    if (!selectedGame) return
+    switch (button) {
+      case 'play':
+        launch(selectedGame)
+        break
+      case 'infos':
+        setFooterFocus(null) // en refermant le panneau, on revient sur l'étagère
+        setDetailsOpen(true)
+        break
+      case 'edit':
+        setModal({ kind: 'edit', gameId: selectedGame.id })
+        break
+      case 'cover':
+        setModal({ kind: 'cover', gameId: selectedGame.id })
+        break
+    }
+  }
+
   // --- Navigation (clavier + manette) ---
   const onAction = (action: NavAction): void => {
     // 1. Une modale est ouverte : la navigation se fait dedans
@@ -251,7 +277,29 @@ export default function App() {
       return
     }
 
-    // 3. Sinon, on navigue dans l'étagère
+    // 3. Rangée de boutons sous le jeu (Jouer · Infos · Modifier · Jaquette), atteinte avec « bas »
+    if (footerFocus !== null) {
+      switch (action) {
+        case 'left':
+          setFooterFocus(Math.max(0, footerFocus - 1))
+          return
+        case 'right':
+          setFooterFocus(Math.min(FOOTER_BUTTONS.length - 1, footerFocus + 1))
+          return
+        case 'up':
+        case 'back':
+          setFooterFocus(null) // retour à l'étagère
+          return
+        case 'confirm':
+          runFooterButton(FOOTER_BUTTONS[footerFocus])
+          return
+        case 'down':
+          return
+      }
+      // Les autres boutons (Y, X, Start, RB…) font la même chose que sur l'étagère
+    }
+
+    // 4. Sinon, on navigue dans l'étagère
     const columns = countColumns(shelfRef.current)
     switch (action) {
       case 'left':
@@ -264,7 +312,9 @@ export default function App() {
         setSelected((i) => (i - columns >= 0 ? i - columns : i))
         break
       case 'down':
-        setSelected((i) => (i + columns <= last ? i + columns : i))
+        // Pas de rangée en dessous (l'étagère n'en a qu'une) : on descend sur les boutons, sur « Infos »
+        if (selected + columns <= last) setSelected(selected + columns)
+        else if (selectedGame) setFooterFocus(FOOTER_BUTTONS.indexOf('infos'))
         break
       case 'confirm':
         launch(selectedGame)
@@ -282,7 +332,7 @@ export default function App() {
         pickAndAdd()
         break
       case 'details':
-        if (selectedGame) setDetailsOpen(true)
+        if (selectedGame) runFooterButton('infos')
         break
       case 'back':
         break
@@ -385,6 +435,7 @@ export default function App() {
           onSelect={setSelected}
           onOpen={(index) => {
             setSelected(index)
+            setFooterFocus(null)
             setDetailsOpen(true)
           }}
           scroll={scroll}
@@ -415,24 +466,33 @@ export default function App() {
               {formatGameStats(selectedGame, installProgress[selectedGame.id])}
             </div>
           </div>
+          {/* Boutons sous le jeu. À la manette / au clavier : « bas » pour y aller, gauche / droite, A pour valider */}
           <div className="details-actions">
             {/* Gros bouton « Jouer » (le seul moyen de lancer à la souris : plus de double-clic) */}
-            <button className="play-btn" onClick={() => launch(selectedGame)} disabled={running.running}>
+            <button
+              className={`play-btn${footerFocus === 0 ? ' pad-focus' : ''}`}
+              onClick={() => runFooterButton('play')}
+              disabled={running.running}
+            >
               <span className="play-btn-icon" aria-hidden="true">
                 {selectedGame.installed === false ? '⬇' : '▶'}
               </span>
               {selectedGame.installed === false ? 'Installer' : 'Jouer'}
             </button>
-            <button className="btn" onClick={() => setModal({ kind: 'edit', gameId: selectedGame.id })}>
+            <button className={`btn${footerFocus === 1 ? ' pad-focus' : ''}`} onClick={() => runFooterButton('infos')}>
+              ⓘ Infos
+            </button>
+            <button className={`btn${footerFocus === 2 ? ' pad-focus' : ''}`} onClick={() => runFooterButton('edit')}>
               Modifier
             </button>
-            <button className="btn" onClick={() => setModal({ kind: 'cover', gameId: selectedGame.id })}>
+            <button className={`btn${footerFocus === 3 ? ' pad-focus' : ''}`} onClick={() => runFooterButton('cover')}>
               Jaquette
             </button>
           </div>
           <div className="details-help">
-            <kbd>Entrée</kbd>/<kbd>A</kbd> jouer · <kbd>I</kbd>/<kbd>RB</kbd> détails · <kbd>E</kbd>/<kbd>Y</kbd> modifier · <kbd>C</kbd>/<kbd>X</kbd>{' '}
-            jaquette · <kbd>P</kbd>/<kbd>Start</kbd> paramètres · <kbd>F11</kbd> plein écran
+            <kbd>Entrée</kbd>/<kbd>A</kbd> jouer · <kbd>↓</kbd> boutons (Infos…) · <kbd>I</kbd>/<kbd>RB</kbd> infos ·{' '}
+            <kbd>E</kbd>/<kbd>Y</kbd> modifier · <kbd>C</kbd>/<kbd>X</kbd> jaquette · <kbd>P</kbd>/<kbd>Start</kbd>{' '}
+            paramètres · <kbd>F11</kbd> plein écran
           </div>
         </footer>
       )}
