@@ -14,6 +14,7 @@ import LoadingScreen from './components/LoadingScreen'
 import SteamImport from './components/SteamImport'
 import PcImport from './components/PcImport'
 import GameDetails from './components/GameDetails'
+import FpsCounter from './components/FpsCounter'
 import type { NavAction } from './input/actions'
 import { useKeyboard } from './input/useKeyboard'
 import { useGamepad } from './input/useGamepad'
@@ -421,6 +422,7 @@ export default function App() {
       onDrop={onDrop}
     >
       <UpdateBanner />
+      <FpsCounter />
 
       <header className="topbar">
         <h1 className="logo">
