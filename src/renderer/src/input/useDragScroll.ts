@@ -18,6 +18,16 @@ interface Options {
   sensitivity: number
   /** Fait avancer la sélection de `steps` jeux (négatif = vers la gauche). */
   moveBy: (steps: number) => void
+  /**
+   * Pendant le glisser : où en est la souris entre deux crans (fraction de jeu, -1..1),
+   * pour que l'étagère suive le curseur en continu. Appelé avec (0, false) à la fin.
+   */
+  onDrag?: (offset: number, dragging: boolean) => void
+  /**
+   * Fin du glisser, avec où en était la souris entre deux crans. Renvoie `true` si l'étagère part
+   * sur son élan (elle s'occupe alors de la suite), `false` pour s'arrêter au jeu le plus proche.
+   */
+  onRelease?: (offset: number) => boolean
 }
 
 interface DragState {
@@ -29,7 +39,7 @@ interface DragState {
   active: boolean
 }
 
-export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
+export function useDragScroll({ enabled, sensitivity, moveBy, onDrag, onRelease }: Options) {
   const drag = useRef<DragState | null>(null)
   const justDragged = useRef(false)
   const pixelsPerGame = PIXELS_PER_GAME[Math.min(5, Math.max(1, Math.round(sensitivity))) - 1]
@@ -59,12 +69,20 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
       d.lastStepX -= steps * pixelsPerGame
       moveBy(steps)
     }
+    onDrag?.((d.lastStepX - event.clientX) / pixelsPerGame, true)
   }
 
   function onPointerUp(event: PointerEvent<HTMLElement>): void {
     const d = drag.current
     drag.current = null
     if (!d?.active) return
+    const rest = (d.lastStepX - event.clientX) / pixelsPerGame
+    // Lâché en plein mouvement (un « coup » de souris) : l'étagère continue sur son élan (voir useMomentum.ts)
+    if (!onRelease?.(rest)) {
+      // Lâché à plus de la moitié du chemin vers le jeu suivant : on y va (comme un téléphone)
+      if (Math.abs(rest) >= 0.5) moveBy(Math.sign(rest))
+      onDrag?.(0, false)
+    }
     justDragged.current = true
     event.currentTarget.classList.remove('dragging')
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {

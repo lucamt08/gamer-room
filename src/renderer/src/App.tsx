@@ -14,11 +14,12 @@ import LoadingScreen from './components/LoadingScreen'
 import SteamImport from './components/SteamImport'
 import PcImport from './components/PcImport'
 import GameDetails from './components/GameDetails'
+import FpsCounter from './components/FpsCounter'
 import type { NavAction } from './input/actions'
 import { useKeyboard } from './input/useKeyboard'
 import { useGamepad } from './input/useGamepad'
 import { handleModalNav } from './input/focusNav'
-import { cleanError, countColumns } from './utils'
+import { cleanError } from './utils'
 import { playTick } from './sound'
 
 /**
@@ -300,7 +301,7 @@ export default function App() {
     }
 
     // 4. Sinon, on navigue dans l'étagère
-    const columns = countColumns(shelfRef.current)
+    const columns = Math.max(1, shelfGames.length) // l'étagère n'a qu'une rangée
     switch (action) {
       case 'left':
         setSelected((i) => Math.max(0, i - 1))
@@ -421,6 +422,7 @@ export default function App() {
       onDrop={onDrop}
     >
       <UpdateBanner />
+      <FpsCounter />
 
       <header className="topbar">
         <h1 className="logo">

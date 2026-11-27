@@ -69,7 +69,11 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   ipc.ts           Tous les ipcMain.handle
 src/preload/     contextBridge → window.api (fonctions IPC explicites uniquement)
 src/renderer/    Interface React (App.tsx, components/, input/ clavier+manette)
-  components/GameDetails.tsx Panneau de détails (clic sur une boîte, touche I, bouton RB) : jeu à gauche, fiche + succès à droite
+  components/GameDetails.tsx Panneau de détails (clic sur la boîte du centre, touche I, bouton RB) : jeu à gauche, fiche + succès à droite
+  components/Shelf.tsx  L'étagère : molette, glisser, clics, et la scène 3D dans un <canvas>
+  components/FpsCounter.tsx Compteur d'images par seconde de l'interface (touche F3)
+  shelf3d/         Étagère en WebGL (three.js) : ShelfScene.ts (scène, animations, souris), textures.ts
+                   (jaquette + badges, tranches, ombres, dessinées dans des <canvas>), tween.ts (courbes façon CSS)
 src/shared/      types.ts (types communs) et ipc.ts (noms des canaux IPC)
   launch.ts        Règles de lancement communes (launchedByStore, storeName…)
   duplicates.ts    Doublons (même nom = même jeu : une seule boîte affichée, rien supprimé) + origine du jeu
@@ -150,3 +154,12 @@ les applis installées proposent la mise à jour.
   du projet dans `httpJson.ts`.
 - Les raccourcis `.lnk` vers des URL (`steam://…`) ne sont pas supportés pour l'instant.
 - L'appli n'est pas signée → avertissement SmartScreen à l'installation.
+- **Performances de l'étagère** : ne JAMAIS refaire les boîtes en 3D CSS (`preserve-3d`, `box-reflect`…). Chromium
+  recalcule tout avec le processeur à chaque image (1,75 cœur sur un écran 174 Hz, l'appli ramait). L'étagère est
+  en WebGL (`shelf3d/`), comme BoxShelf. Les jaquettes y sont des textures : le protocole `cover://` envoie
+  `Access-Control-Allow-Origin` pour ça (`covers.ts`). `force_high_performance_gpu` (`index.ts`) choisit la carte
+  graphique la plus puissante sur les PC qui en ont deux.
+- **Processus principal = souris et clavier** : tant qu'il est occupé, l'interface ne reçoit plus rien (« ça coupe
+  puis ça reprend »). Dans tout ce qui tourne en boucle (suivis toutes les 5-10 s), jamais de commande bloquante
+  (`execFileSync`, `reg query … /s` sur un gros arbre) : utiliser les versions `…Async` de `pcGames/registry.ts`.
+  Exemple corrigé : le suivi Riot figeait l'appli 2 s toutes les 10 s en relisant toute la liste des programmes.
