@@ -9,9 +9,9 @@ avec leurs jaquettes, et se lancent **automatiquement en plein écran sans bordu
 ## ✨ Fonctionnalités
 
 - **Ajouter un jeu / programme** : bouton « + Ajouter » ou **glisser-déposer** un `.exe` ou un raccourci `.lnk` dans la fenêtre.
-- **« + Jeux Steam »** : toute ta bibliothèque Steam, même les jeux non installés (bouton « Installer »).
-- **« + Jeux du PC »** : jeux **Epic Games, Battle.net, GOG, Riot Games** (installés ou non) et jeux sans launcher
-  trouvés sur le PC. Les jeux lancés par un launcher démarrent directement, le launcher reste en arrière-plan.
+- **« + Jeux de ce PC »** : un seul bouton pour tous tes jeux, rangés par launcher : **Steam, Epic Games, Battle.net,
+  GOG, Riot Games** (installés ou non, bouton « Installer ») et jeux sans launcher trouvés sur le PC.
+  Les jeux lancés par un launcher démarrent directement, le launcher reste en arrière-plan.
 - **Pas de doublons** : un jeu présent sur plusieurs launchers n'a qu'une boîte. Chaque jeu indique d'où il vient
   (Steam, Epic Games… ou jeu local).
 - **Panneau de détails** (clic sur le jeu du centre) : description, développeur, genres, note… depuis la page Steam du jeu,
@@ -137,7 +137,7 @@ puis **créer le tag** qui déclenche la publication.
 ```
 src/
   main/       Processus principal (Node.js) : fichiers, launchers, lancement des jeux, code Windows
-    pcGames/    « + Jeux du PC » : un fichier par launcher (Epic, Battle.net, GOG, Riot…)
+    pcGames/    « + Jeux de ce PC » (hors Steam) : un fichier par launcher (Epic, Battle.net, GOG, Riot…)
   preload/    Le "pont" sécurisé entre l'interface et le main (window.api)
   renderer/   L'interface React (App.tsx, components/, input/ clavier + manette)
   shared/     Types et règles communs au main et à l'interface

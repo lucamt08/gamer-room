@@ -1,4 +1,4 @@
-// « + Jeux du PC » : rassemble les jeux trouvés sur le PC (hors Steam) et les ajoute à Gamer Room.
+// « + Jeux de ce PC » : rassemble les jeux trouvés sur le PC (hors Steam) et les ajoute à Gamer Room.
 //
 // Sources, de la plus sûre à la moins sûre :
 //  - Epic Games, Battle.net, GOG, Riot Games : leurs propres listes de jeux installés (voir epicGames.ts, etc.),

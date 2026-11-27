@@ -4,7 +4,7 @@
 // On ne supprime jamais rien : chaque exemplaire reste dans library.json (son temps de jeu, sa jaquette…).
 // Mais l'étagère n'affiche qu'UNE boîte par jeu : le meilleur exemplaire (voir bestCopyFirst).
 // Les autres sont indiqués sous le nom du jeu (« Aussi sur Epic Games »).
-// Les imports (« + Jeux Steam », « + Jeux du PC ») ne proposent plus un jeu déjà présent (voir isAlreadyInLibrary).
+// Les imports (« + Jeux de ce PC ») ne proposent plus un jeu déjà présent (voir isAlreadyInLibrary).
 //
 // Deux jeux sont « le même » quand leur nom est le même, sans tenir compte des majuscules, accents,
 // symboles ™ ® et de la ponctuation : "VALORANT" = "Valorant", "Batman™: Arkham Knight" = "Batman Arkham Knight".
