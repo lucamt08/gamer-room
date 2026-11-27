@@ -1,7 +1,8 @@
 // Le carrousel : une rangée de boîtes de jeux, le jeu sélectionné au centre et de face,
 // les autres rangés de chaque côté, posés sur un sol brillant qui les reflète.
 // Navigation : flèches / manette (gérées dans App.tsx), molette de la souris (voir input/useWheelScroll.ts)
-// ou glisser à la souris (voir input/useDragScroll.ts). Un clic sur une boîte ouvre ses détails (GameDetails.tsx).
+// ou glisser à la souris (voir input/useDragScroll.ts). Un clic sur une boîte de côté la met au centre ;
+// un clic sur la boîte du centre ouvre ses détails (GameDetails.tsx).
 // On lance un jeu avec le bouton « Jouer » (dans App.tsx).
 import { forwardRef, useEffect, useRef } from 'react'
 import type { Game } from '@shared/types'
@@ -14,7 +15,7 @@ interface Props {
   games: Game[]
   selectedIndex: number
   onSelect: (index: number) => void
-  /** Clic sur une boîte : ouvre le panneau de détails de ce jeu (voir GameDetails.tsx). */
+  /** Clic sur la boîte du centre : ouvre le panneau de détails de ce jeu (voir GameDetails.tsx). */
   onOpen: (index: number) => void
   /** Réglages de la molette et du glisser (venant des Paramètres). */
   scroll: ScrollSettings
@@ -75,7 +76,17 @@ const Shelf = forwardRef<HTMLDivElement, Props>(function Shelf({ games, selected
       {/* Les boîtes (ce bloc est reflété sous lui-même pour faire le sol brillant) */}
       <div className="cf-track" ref={ref}>
         {games.map((game, index) => (
-          <GameBox key={game.id} game={game} offset={index - selectedIndex} onSelect={() => onOpen(index)} />
+          <GameBox
+            key={game.id}
+            game={game}
+            offset={index - selectedIndex}
+            // Clic sur le jeu du centre : ses détails. Clic sur un jeu de côté : on le met au centre.
+            onSelect={() => {
+              if (index === selectedIndex) return onOpen(index)
+              target.current = index
+              onSelect(index)
+            }}
+          />
         ))}
       </div>
       {/* Ligne d'horizon du sol */}

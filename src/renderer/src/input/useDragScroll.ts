@@ -43,6 +43,12 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
   function onPointerMove(event: PointerEvent<HTMLElement>): void {
     const d = drag.current
     if (!d || event.pointerId !== d.pointerId) return
+    // Le bouton a été relâché sans qu'on reçoive le « relâché » (hors de la fenêtre, Alt+Tab…) :
+    // on arrête le glisser, sinon le curseur reste en « main fermée »
+    if ((event.buttons & 1) === 0) {
+      endDrag(event)
+      return
+    }
 
     if (!d.active) {
       if (Math.abs(event.clientX - d.startX) < DRAG_THRESHOLD) return
@@ -63,13 +69,29 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
 
   function onPointerUp(event: PointerEvent<HTMLElement>): void {
     const d = drag.current
-    drag.current = null
-    if (!d?.active) return
+    if (!d?.active) {
+      drag.current = null
+      return
+    }
     justDragged.current = true
+    endDrag(event)
+  }
+
+  /**
+   * Fin du glisser, quelle qu'en soit la raison : on retire TOUJOURS la classe « dragging »
+   * (curseur « main fermée »), même si le « relâché » n'est jamais arrivé.
+   */
+  function endDrag(event: PointerEvent<HTMLElement>): void {
+    drag.current = null
     event.currentTarget.classList.remove('dragging')
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
+  }
+
+  // Windows a repris la souris (fenêtre qui perd le focus, jeu lancé…) : le glisser s'arrête
+  function onLostPointerCapture(event: PointerEvent<HTMLElement>): void {
+    if (drag.current?.active) endDrag(event)
   }
 
   // Appelé AVANT les clics des boîtes : on annule le clic de fin de glisser
@@ -80,5 +102,5 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
     }
   }
 
-  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onClickCapture }
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onLostPointerCapture, onClickCapture }
 }
