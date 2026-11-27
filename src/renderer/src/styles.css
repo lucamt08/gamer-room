@@ -1721,3 +1721,11 @@ html.overlay-window body {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* Bouton choisi à la manette / au clavier sous le jeu (« bas » depuis l'étagère) */
+.details-actions .pad-focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  transform: scale(1.06);
+  box-shadow: 0 0 24px rgba(111, 168, 255, 0.45);
+}
