@@ -25,7 +25,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize } from 'node:path'
 import type { DetectedGame } from '@shared/types'
 import { findMainExe } from './mainExe'
-import { readRegistryTree } from './registry'
+import { findRegistryKeys, findRegistryKeysAsync, readRegistryTree, readRegistryTreeAsync, type RegistryTree } from './registry'
 
 /** Ce qu'il faut pour ajouter et lancer un jeu Riot. */
 export interface RiotGame extends DetectedGame {
@@ -52,11 +52,16 @@ function riotDataFolder(): string {
   return join(process.env['ProgramData'] ?? 'C:\\ProgramData', 'Riot Games')
 }
 
-/** Informations du registre (« Ajouter ou supprimer des programmes ») : "<produit>.<version>" → nom, taille. */
-function readUninstallEntries(): Map<string, { name: string; sizeBytes: number | null; folder: string }> {
-  const entries = new Map<string, { name: string; sizeBytes: number | null; folder: string }>()
-  for (const root of ['HKCU', 'HKLM']) {
-    for (const [key, values] of readRegistryTree(`${root}\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall`)) {
+/** Entrées Riot du registre (« Ajouter ou supprimer des programmes ») : "<produit>.<version>" → nom, taille, dossier. */
+export type RiotUninstallEntries = Map<string, { name: string; sizeBytes: number | null; folder: string }>
+
+const UNINSTALL_ROOTS = ['HKCU', 'HKLM'].map((root) => `${root}\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall`)
+
+/** Rassemble les clés « Riot Game <produit>.<version> » lues dans le registre. */
+function toEntries(trees: RegistryTree[]): RiotUninstallEntries {
+  const entries: RiotUninstallEntries = new Map()
+  for (const tree of trees) {
+    for (const [key, values] of tree) {
       const id = /\\Riot Game ([^\\]+)$/i.exec(key)?.[1]
       if (!id || entries.has(id)) continue
       const sizeKb = Number(values['estimatedsize'])
@@ -70,8 +75,26 @@ function readUninstallEntries(): Map<string, { name: string; sizeBytes: number |
   return entries
 }
 
-/** Chemin de RiotClientServices.exe, ou null si le Riot Client n'est pas installé. */
-export function findRiotClient(): string | null {
+/**
+ * Lit les entrées Riot du registre. On cherche d'abord les clés « Riot Game … », puis on lit seulement
+ * celles-là (lire toute la liste des programmes installés prenait ~0,7 s et figeait l'appli).
+ */
+export function readUninstallEntries(): RiotUninstallEntries {
+  const keys = UNINSTALL_ROOTS.flatMap((root) => findRegistryKeys(root, 'Riot Game'))
+  return toEntries(keys.map((key) => readRegistryTree(key)))
+}
+
+/** Pareil, sans bloquer l'appli (pour le suivi toutes les 10 s, voir riotInstalls.ts). */
+export async function readUninstallEntriesAsync(): Promise<RiotUninstallEntries> {
+  const keys = (await Promise.all(UNINSTALL_ROOTS.map((root) => findRegistryKeysAsync(root, 'Riot Game')))).flat()
+  return toEntries(await Promise.all(keys.map((key) => readRegistryTreeAsync(key))))
+}
+
+/**
+ * Chemin de RiotClientServices.exe, ou null si le Riot Client n'est pas installé.
+ * `entries` : entrées du registre déjà lues (sinon on les lit).
+ */
+export function findRiotClient(entries: RiotUninstallEntries = readUninstallEntries()): string | null {
   const candidates: string[] = []
   // 1. Le fichier où Riot note l'emplacement de son client
   try {
@@ -84,7 +107,7 @@ export function findRiotClient(): string | null {
     // fichier absent ou illisible : on essaie le registre
   }
   // 2. Le registre (entrée « Riot Client » de « Ajouter ou supprimer des programmes »)
-  for (const [id, entry] of readUninstallEntries()) {
+  for (const [id, entry] of entries) {
     if (/^riot_client/i.test(id) && entry.folder) candidates.push(join(entry.folder, 'RiotClientServices.exe'))
   }
   const found = candidates.map((path) => normalize(path)).find((path) => existsSync(path))
@@ -126,11 +149,13 @@ function readProductSettings(): Map<string, string> {
   return products
 }
 
-/** Tous les jeux Riot installés (liste vide si le Riot Client n'est pas installé). */
-export function listRiotGames(): RiotGame[] {
-  const client = findRiotClient()
+/**
+ * Tous les jeux Riot installés (liste vide si le Riot Client n'est pas installé).
+ * `uninstall` : entrées du registre déjà lues (sinon on les lit).
+ */
+export function listRiotGames(uninstall: RiotUninstallEntries = readUninstallEntries()): RiotGame[] {
+  const client = findRiotClient(uninstall)
   if (!client) return []
-  const uninstall = readUninstallEntries()
   const games: RiotGame[] = []
   for (const [riotId, folder] of readProductSettings()) {
     // Le dossier noté par Riot peut ne plus exister (jeu désinstallé, serveur de test jamais téléchargé…)

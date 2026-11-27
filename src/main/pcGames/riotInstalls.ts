@@ -9,7 +9,7 @@
 import type { Game } from '@shared/types'
 import { getGames, updateGame } from '../library'
 import { isKnownLauncherExe } from '../knownLaunchers'
-import { findRiotClient, listRiotGames } from './riotGames'
+import { findRiotClient, listRiotGames, readUninstallEntriesAsync } from './riotGames'
 
 const CHECK_INTERVAL = 10_000
 
@@ -18,13 +18,19 @@ let timer: NodeJS.Timeout | null = null
 /** Démarre le suivi. `onGameUpdated` prévient l'interface quand un jeu change. */
 export function startRiotInstallWatcher(onGameUpdated: (game: Game) => void): void {
   if (timer) return
-  const check = (): void => {
+  let running = false
+  const check = async (): Promise<void> => {
+    if (running) return // la vérification précédente n'est pas finie
+    running = true
     try {
-      const riotGames = getGames().filter((g) => g.source === 'riot' && g.storeId)
-      if (riotGames.length === 0) return
-      const client = findRiotClient()
+      if (!getGames().some((g) => g.source === 'riot' && g.storeId)) return
+      // Lecture du registre SANS bloquer l'appli (avant : ~2 s figée toutes les 10 s, souris et clavier compris)
+      const entries = await readUninstallEntriesAsync()
+      const client = findRiotClient(entries)
       if (!client) return // Riot Client introuvable : on ne touche à rien
-      const installed = new Map(listRiotGames().map((g) => [g.riotId, g]))
+      const installed = new Map(listRiotGames(entries).map((g) => [g.riotId, g]))
+      // Liste relue après l'attente : un jeu a pu être modifié ou retiré entre-temps
+      const riotGames = getGames().filter((g) => g.source === 'riot' && g.storeId)
 
       for (const game of riotGames) {
         const found = installed.get(game.storeId!)
@@ -56,8 +62,10 @@ export function startRiotInstallWatcher(onGameUpdated: (game: Game) => void): vo
       }
     } catch (error) {
       console.error('[riot] Erreur pendant le suivi des installations', error)
+    } finally {
+      running = false
     }
   }
-  check()
-  timer = setInterval(check, CHECK_INTERVAL)
+  void check()
+  timer = setInterval(() => void check(), CHECK_INTERVAL)
 }
