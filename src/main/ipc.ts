@@ -7,6 +7,8 @@ import { IPC } from '@shared/ipc'
 import * as library from './library'
 import * as sgdb from './steamgriddb'
 import { launchGame, killRunningGame } from './gameLauncher'
+import { installSteamGame } from './steamInstalls'
+import { updateGameSizes } from './gameSizes'
 import { getSettings, saveSettings } from './settings'
 import { findSteamExe, listSteamGames } from './steamLibrary'
 import { registerKillShortcut } from './shortcuts'
@@ -34,7 +36,12 @@ export function registerIpcHandlers(): void {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle(IPC.addGame, (_event, path: string) => library.addGameFromPath(path))
+  ipcMain.handle(IPC.addGame, (event, path: string) => {
+    const game = library.addGameFromPath(path)
+    // Taille du dossier du nouveau jeu, calculée en arrière-plan
+    updateGameSizes((updated) => event.sender.send(IPC.gameUpdated, updated))
+    return game
+  })
   ipcMain.handle(IPC.updateGame, (_event, id: string, patch: GamePatch) => {
     // On ne laisse passer que les champs modifiables depuis l'interface
     const { name, args, forceFullscreen, skipLauncher, playtimeSeconds, fwsModule } = patch
@@ -71,10 +78,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.launchGame, async (_event, id: string) => {
     const game = library.getGame(id)
     if (!game) throw new Error('Jeu introuvable.')
+    if (game.installed === false) throw new Error("Ce jeu n'est pas installé : clique sur « Installer ».")
     await launchGame(game)
     library.updateGame(id, { lastPlayedAt: new Date().toISOString() })
   })
   ipcMain.handle(IPC.killGame, () => killRunningGame())
+  // Jeu Steam pas installé : ouvre la fenêtre d'installation de Steam
+  ipcMain.handle(IPC.steamInstall, (_event, id: string) => installSteamGame(id))
 
   // --- SteamGridDB ---
   // Recherche avec correction automatique du nom si rien n'est trouvé

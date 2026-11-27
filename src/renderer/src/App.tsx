@@ -1,7 +1,7 @@
 // Composant principal : l'étagère + les fenêtres modales + la navigation.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Game, RunningState, SgdbGame } from '@shared/types'
-import { formatPlaytime, playtimeFromSteam, totalPlaytimeSeconds } from '@shared/playtime'
+import type { Game, InstallProgress, RunningState, SgdbGame } from '@shared/types'
+import { formatPlaytime, formatSize, playtimeFromSteam, totalPlaytimeSeconds } from '@shared/playtime'
 import { DEFAULT_SCROLL_SETTINGS, type ScrollSettings } from '@shared/scroll'
 import Shelf from './components/Shelf'
 import GameEditor from './components/GameEditor'
@@ -32,14 +32,24 @@ function formatLastPlayed(lastPlayedAt: string | null): string {
 }
 
 /**
- * Ligne affichée sous le nom du jeu sélectionné : temps de jeu total + dernière partie.
- * Ex. "12 h 30 de jeu · Joué hier", ou "Jamais joué".
+ * Ligne affichée sous le nom du jeu sélectionné : temps de jeu total, dernière partie et taille.
+ * Ex. "12 h 30 de jeu · Joué hier · 48,2 Go", "Jamais joué · ⬇ Non installé · ≈ 65 Go",
+ * ou "98 h 32 de jeu · Installation… 42 %" pendant un téléchargement Steam.
  */
-function formatGameStats(game: Game): string {
+function formatGameStats(game: Game, installPercent: number | undefined): string {
+  const parts: string[] = []
   const playtime = formatPlaytime(totalPlaytimeSeconds(game))
-  if (!playtime) return formatLastPlayed(game.lastPlayedAt)
+  if (playtime) parts.push(`${playtime} de jeu`)
   // Temps de départ saisi à la main mais jamais lancé : pas de "Jamais joué" à côté
-  return game.lastPlayedAt ? `${playtime} de jeu · ${formatLastPlayed(game.lastPlayedAt)}` : `${playtime} de jeu`
+  if (game.lastPlayedAt || !playtime) parts.push(formatLastPlayed(game.lastPlayedAt))
+  const size = formatSize(game.sizeBytes)
+  if (game.installed === false) {
+    if (installPercent !== undefined) parts.push(`Installation… ${installPercent} %`)
+    else parts.push(size ? `⬇ Non installé · ≈ ${size}` : '⬇ Non installé')
+  } else if (size) {
+    parts.push(size)
+  }
+  return parts.join(' · ')
 }
 
 /** Quelle fenêtre modale est ouverte (au plus une à la fois). */
@@ -57,6 +67,8 @@ export default function App() {
   const [running, setRunning] = useState<RunningState>({ running: false, gameId: null })
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null)
   const [dragging, setDragging] = useState(false)
+  // Téléchargements Steam en cours (id du jeu → pourcentage)
+  const [installProgress, setInstallProgress] = useState<InstallProgress>({})
   // Réglages de défilement (molette, glisser, manette), mis à jour quand on enregistre les Paramètres
   const [scroll, setScroll] = useState<ScrollSettings>(DEFAULT_SCROLL_SETTINGS)
 
@@ -69,6 +81,7 @@ export default function App() {
     window.api.getSettings().then(setScroll)
     // Un jeu corrigé en arrière-plan au démarrage (ex. "Longshot" → son vrai nom et sa jaquette)
     const stopGameUpdates = window.api.onGameUpdated(replaceGame)
+    const stopInstallProgress = window.api.onInstallProgress(setInstallProgress)
     const stopRunning = window.api.onRunningState((state) => {
       setRunning(state)
       if (state.message) showToast(state.message)
@@ -79,6 +92,7 @@ export default function App() {
     })
     return () => {
       stopGameUpdates()
+      stopInstallProgress()
       stopRunning()
     }
   }, [])
@@ -102,6 +116,12 @@ export default function App() {
     async (game: Game | undefined) => {
       if (!game || running.running) return
       try {
+        // Jeu Steam pas installé : « Jouer » devient « Installer » (Steam ouvre sa fenêtre d'installation)
+        if (game.installed === false) {
+          await window.api.steamInstall(game.id)
+          showToast(`Steam ouvre l'installation de ${game.name}`)
+          return
+        }
         await window.api.launchGame(game.id)
       } catch (e) {
         showToast(cleanError(e), true)
@@ -280,7 +300,7 @@ export default function App() {
         <button className="btn" onClick={pickAndAdd}>
           + Ajouter
         </button>
-        <button className="btn" onClick={() => setModal({ kind: 'steam' })} title="Ajouter des jeux Steam installés">
+        <button className="btn" onClick={() => setModal({ kind: 'steam' })} title="Ajouter les jeux de ta bibliothèque Steam (installés ou non) et mettre la liste à jour">
           + Jeux Steam
         </button>
         <button className="btn" onClick={() => setModal({ kind: 'settings' })}>
@@ -309,16 +329,16 @@ export default function App() {
               className="hint"
               title={playtimeFromSteam(selectedGame) ? 'Temps de jeu importé de Steam' : 'Temps de jeu compté par Gamer Room'}
             >
-              {formatGameStats(selectedGame)}
+              {formatGameStats(selectedGame, installProgress[selectedGame.id])}
             </div>
           </div>
           <div className="details-actions">
             {/* Gros bouton « Jouer » (le seul moyen de lancer à la souris : plus de double-clic) */}
             <button className="play-btn" onClick={() => launch(selectedGame)} disabled={running.running}>
               <span className="play-btn-icon" aria-hidden="true">
-                ▶
+                {selectedGame.installed === false ? '⬇' : '▶'}
               </span>
-              Jouer
+              {selectedGame.installed === false ? 'Installer' : 'Jouer'}
             </button>
             <button className="btn" onClick={() => setModal({ kind: 'edit', gameId: selectedGame.id })}>
               Modifier

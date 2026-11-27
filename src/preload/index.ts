@@ -17,6 +17,7 @@ import type {
   SgdbSearchResult,
   Settings,
   SteamGameEntry,
+  InstallProgress,
   UpdateStatus
 } from '@shared/types'
 
@@ -36,10 +37,14 @@ const api = {
   removeGame: (id: string): Promise<void> => ipcRenderer.invoke(IPC.removeGame, id),
   /** Un jeu a été corrigé en arrière-plan (vrai nom, jaquette…). */
   onGameUpdated: (cb: (game: Game) => void) => listen(IPC.gameUpdated, cb),
-  /** Jeux Steam installés sur le PC. */
+  /** Jeux de la bibliothèque Steam (installés ou non). */
   steamListGames: (): Promise<SteamGameEntry[]> => ipcRenderer.invoke(IPC.steamListGames),
   /** Ajoute les jeux Steam choisis (par leur numéro Steam). */
   steamAddGames: (appIds: number[]): Promise<Game[]> => ipcRenderer.invoke(IPC.steamAddGames, appIds),
+  /** Ouvre la fenêtre d'installation de Steam pour un jeu pas installé. */
+  steamInstall: (id: string): Promise<void> => ipcRenderer.invoke(IPC.steamInstall, id),
+  /** Avancement des téléchargements Steam en cours (id du jeu → pourcentage). */
+  onInstallProgress: (cb: (progress: InstallProgress) => void) => listen(IPC.steamInstallProgress, cb),
   /** Chemin complet d'un fichier glissé-déposé dans la fenêtre. */
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 

@@ -1,4 +1,4 @@
-// Temps de jeu : quel chiffre afficher, et comment l'écrire.
+// Temps de jeu et taille des jeux : quel chiffre afficher, et comment l'écrire.
 // Partagé entre le main et l'interface.
 
 import type { Game } from './types'
@@ -30,4 +30,22 @@ export function formatPlaytime(seconds: number): string {
   const minutes = totalMinutes % 60
   if (hours === 0) return `${minutes} min`
   return `${hours.toLocaleString('fr-FR')} h ${String(minutes).padStart(2, '0')}`
+}
+
+/**
+ * Écrit une taille lisible, comme l'Explorateur Windows : "850 Mo", "48,2 Go", "1,2 To".
+ * Renvoie une chaîne vide si la taille est inconnue.
+ */
+export function formatSize(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return ''
+  const units = ['Ko', 'Mo', 'Go', 'To']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  // Une décimale pour les Go et To ("48,2 Go"), aucune en dessous ("850 Mo")
+  const digits = unit >= 2 && value < 100 ? 1 : 0
+  return `${value.toLocaleString('fr-FR', { maximumFractionDigits: digits })} ${units[unit]}`
 }
