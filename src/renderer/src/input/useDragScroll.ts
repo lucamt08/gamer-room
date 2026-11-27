@@ -53,6 +53,13 @@ export function useDragScroll({ enabled, sensitivity, moveBy, onDrag, onRelease 
   function onPointerMove(event: PointerEvent<HTMLElement>): void {
     const d = drag.current
     if (!d || event.pointerId !== d.pointerId) return
+    // Le bouton a été relâché sans qu'on reçoive le « relâché » (hors de la fenêtre, Alt+Tab…) :
+    // on arrête le glisser, sinon le curseur reste en « main fermée »
+    if ((event.buttons & 1) === 0) {
+      if (d.active) onDrag?.(0, false) // l'étagère se recale sur le jeu sélectionné
+      endDrag(event)
+      return
+    }
 
     if (!d.active) {
       if (Math.abs(event.clientX - d.startX) < DRAG_THRESHOLD) return
@@ -74,8 +81,10 @@ export function useDragScroll({ enabled, sensitivity, moveBy, onDrag, onRelease 
 
   function onPointerUp(event: PointerEvent<HTMLElement>): void {
     const d = drag.current
-    drag.current = null
-    if (!d?.active) return
+    if (!d?.active) {
+      drag.current = null
+      return
+    }
     const rest = (d.lastStepX - event.clientX) / pixelsPerGame
     // Lâché en plein mouvement (un « coup » de souris) : l'étagère continue sur son élan (voir useMomentum.ts)
     if (!onRelease?.(rest)) {
@@ -84,10 +93,26 @@ export function useDragScroll({ enabled, sensitivity, moveBy, onDrag, onRelease 
       onDrag?.(0, false)
     }
     justDragged.current = true
+    endDrag(event)
+  }
+
+  /**
+   * Fin du glisser, quelle qu'en soit la raison : on retire TOUJOURS la classe « dragging »
+   * (curseur « main fermée »), même si le « relâché » n'est jamais arrivé.
+   */
+  function endDrag(event: PointerEvent<HTMLElement>): void {
+    drag.current = null
     event.currentTarget.classList.remove('dragging')
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
+  }
+
+  // Windows a repris la souris (fenêtre qui perd le focus, jeu lancé…) : le glisser s'arrête
+  function onLostPointerCapture(event: PointerEvent<HTMLElement>): void {
+    if (!drag.current?.active) return
+    onDrag?.(0, false) // l'étagère se recale sur le jeu sélectionné
+    endDrag(event)
   }
 
   // Appelé AVANT les clics des boîtes : on annule le clic de fin de glisser
@@ -98,5 +123,5 @@ export function useDragScroll({ enabled, sensitivity, moveBy, onDrag, onRelease 
     }
   }
 
-  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onClickCapture }
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onLostPointerCapture, onClickCapture }
 }

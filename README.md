@@ -14,7 +14,7 @@ avec leurs jaquettes, et se lancent **automatiquement en plein écran sans bordu
   trouvés sur le PC. Les jeux lancés par un launcher démarrent directement, le launcher reste en arrière-plan.
 - **Pas de doublons** : un jeu présent sur plusieurs launchers n'a qu'une boîte. Chaque jeu indique d'où il vient
   (Steam, Epic Games… ou jeu local).
-- **Panneau de détails** (clic sur un jeu) : description, développeur, genres, note… depuis la page Steam du jeu,
+- **Panneau de détails** (clic sur le jeu du centre) : description, développeur, genres, note… depuis la page Steam du jeu,
   ou Wikipédia s'il n'est pas sur Steam, et les **succès Steam** débloqués avec leur rareté.
 - **Temps de jeu** compté par Gamer Room (et repris de Steam pour les jeux Steam), taille des jeux.
 - **Boîtes de jeu en 3D légère** avec jaquette et tranche visible.

@@ -82,7 +82,7 @@ export default function App() {
   // Réglages de défilement (molette, glisser, manette), mis à jour quand on enregistre les Paramètres
   const [scroll, setScroll] = useState<ScrollSettings>(DEFAULT_SCROLL_SETTINGS)
 
-  // Panneau de détails ouvert (clic sur une boîte, touche I, bouton RB) : voir GameDetails.tsx
+  // Panneau de détails ouvert (clic sur la boîte du centre, touche I, bouton RB) : voir GameDetails.tsx
   const [detailsOpen, setDetailsOpen] = useState(false)
   // Bouton choisi au clavier / à la manette sous le jeu (index dans FOOTER_BUTTONS), ou null = on est sur l'étagère
   const [footerFocus, setFooterFocus] = useState<number | null>(null)
