@@ -381,6 +381,20 @@ export default function App() {
   }, [shelfGames.length, selected])
 
   // --- Glisser-déposer ---
+  // Sécurité : le cadre « Dépose ton .exe » se cache dès qu'un glisser se termine
+  // (lâché ailleurs, annulé avec Échap) ou au moindre clic, pour ne jamais rester bloqué
+  useEffect(() => {
+    const hide = (): void => setDragging(false)
+    window.addEventListener('dragend', hide)
+    window.addEventListener('drop', hide)
+    window.addEventListener('mousedown', hide)
+    return () => {
+      window.removeEventListener('dragend', hide)
+      window.removeEventListener('drop', hide)
+      window.removeEventListener('mousedown', hide)
+    }
+  }, [])
+
   const onDrop = (event: React.DragEvent): void => {
     event.preventDefault()
     setDragging(false)
@@ -394,11 +408,15 @@ export default function App() {
     <div
       className="app"
       onDragOver={(e) => {
+        // Seulement pour des fichiers venus de Windows : glisser une image ou un texte
+        // de l'appli (souris qui bouge pendant un clic) ne doit pas afficher le cadre
+        if (!e.dataTransfer.types.includes('Files')) return
         e.preventDefault()
         setDragging(true)
       }}
       onDragLeave={(e) => {
-        if (e.currentTarget === e.target) setDragging(false)
+        // relatedTarget vide = la souris est sortie de la fenêtre
+        if (e.relatedTarget === null || !e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false)
       }}
       onDrop={onDrop}
     >
