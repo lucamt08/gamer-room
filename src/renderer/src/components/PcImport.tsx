@@ -1,5 +1,5 @@
 // Fenêtre "Jeux du PC" : les jeux trouvés sur le PC hors Steam, pas encore dans Gamer Room.
-//  - Epic Games, Battle.net, GOG : lus dans leurs launchers (sûrs, cochés) ;
+//  - Epic Games, Battle.net, GOG, Riot Games : lus dans leurs launchers (sûrs, cochés) ;
 //  - « Autres jeux détectés » : la détection générale des .exe (voir pcGameDetect.ts). Les plus sûrs sont
 //    cochés, les autres sont « à vérifier » (décochés), avec la raison de la détection.
 // On peut ajouter un dossier où chercher (ex. E:\MesJeux) : la recherche est relancée.
@@ -22,6 +22,7 @@ const SECTIONS: { source: GameSource; title: string }[] = [
   { source: 'epic', title: 'Epic Games' },
   { source: 'battlenet', title: 'Battle.net' },
   { source: 'gog', title: 'GOG' },
+  { source: 'riot', title: 'Riot Games' },
   { source: 'pc', title: 'Autres jeux détectés' }
 ]
 
@@ -99,7 +100,7 @@ const PcImport = forwardRef<HTMLDivElement, Props>(function PcImport({ onClose, 
           </div>
 
           {SECTIONS.map(({ source, title }) => {
-            // Les jeux installés d'abord, puis ceux de la bibliothèque pas installés (Epic)
+            // Les jeux installés d'abord, puis ceux de la bibliothèque pas installés (Epic, Riot)
             const list = games
               .filter((g) => g.source === source)
               .sort((a, b) => Number(a.installed === false) - Number(b.installed === false))

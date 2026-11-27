@@ -5,7 +5,7 @@
 //     HKCU\System\GameConfigStore\Children → MatchedExeFullPath), le .exe principal de chaque sous-dossier
 //     des dossiers de jeux (D:\Games, C:\Jeux… + ceux choisis dans « + Jeux du PC »), et les raccourcis du
 //     bureau et du menu Démarrer ;
-//  2. ON ÉCARTE : dossiers système, jeux Steam / Epic / Battle.net / GOG (gérés à part), jeux déjà dans
+//  2. ON ÉCARTE : dossiers système, jeux Steam / Epic / Battle.net / GOG / Riot (gérés à part), jeux déjà dans
 //     Gamer Room, installateurs et outils, logiciels connus (éditeur Microsoft, Google, NVIDIA, Discord…) ;
 //  3. UNE NOTE « est-ce un jeu ? » : chaque indice rapporte des points (moteur de jeu reconnu, reconnu par
 //     Windows, dans un dossier de jeux, DLSS/FSR, fichiers Steam, gros .exe…) ;
@@ -22,6 +22,7 @@ import type { DetectedGame } from '@shared/types'
 import { readExeInfo } from '../exeInfo'
 import { fallbackNames } from '../gameNames'
 import { isInside } from '../launchLearning'
+import { isKnownLauncherExe } from '../knownLaunchers'
 import { findMainExe, NOT_THE_GAME } from './mainExe'
 
 /** Note minimale pour proposer un jeu coché (sûrement un jeu), et pour le proposer décoché (à vérifier). */
@@ -34,10 +35,6 @@ const USUAL_GAME_FOLDERS = ['Games', 'Jeux', 'Game', 'Jeux vidéo', 'Jeux video'
 /** Éditeurs de logiciels qui ne sont pas des jeux (navigateurs, pilotes, outils…). */
 const SOFTWARE_PUBLISHERS =
   /^(microsoft corporation|google|adobe|nvidia|advanced micro devices|amd|intel|discord|mozilla|oracle|logitech|razer|corsair|realtek|valve|epic games|riot games|overwolf|obs project|spotify|github|electron|python|elgato|steelseries)/i
-
-/** Les launchers eux-mêmes (ce ne sont pas des jeux). */
-const LAUNCHER_EXES =
-  /^(steam|epicgameslauncher|battle\.net|galaxyclient|riotclientservices|riotclientux|leagueclient(ux)?|upc|ubisoftconnect|eadesktop|origin|playnite.*|gog galaxy)\.exe$/i
 
 /** Dossiers intermédiaires sans intérêt pour trouver le dossier "racine" d'un jeu. */
 const GENERIC_DIRS = /^(bin|bin64|binaries|win64|win32|x64|x86|ship|shipping|retail|game|release|build)$/i
@@ -150,7 +147,7 @@ function isExcluded(exe: string, exclusions: Exclusions): boolean {
     !existsSync(exe) ||
     exclusions.exes.has(lower) ||
     NOT_THE_GAME.test(name) ||
-    LAUNCHER_EXES.test(name) ||
+    isKnownLauncherExe(name) || // les launchers eux-mêmes (ce ne sont pas des jeux)
     isInside(exe, systemRoot) ||
     lower.includes('\\windowsapps\\') || // applis du Microsoft Store (protégées)
     lower.includes('\\steamapps\\') || // jeux Steam : gérés par « + Jeux Steam »

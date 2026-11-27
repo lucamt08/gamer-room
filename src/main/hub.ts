@@ -87,6 +87,20 @@ export function showHub(): void {
  * Bouton Guide / PS de la manette : ouvre le hub en plein écran, devant tout le reste
  * (même si Gamer Room était seulement près de l'horloge).
  */
+/**
+ * Remet le hub devant les autres fenêtres, sans changer son mode (plein écran ou non).
+ * Sert pendant le lancement d'un jeu : un launcher qui s'ouvre passe derrière Gamer Room (voir gameLauncher.ts).
+ */
+export function bringHubToFront(): void {
+  const window = getHub()
+  if (!window) return
+  if (window.isMinimized()) window.restore()
+  window.show()
+  // Windows empêche une appli en arrière-plan de prendre le focus : on utilise l'astuce de windowManager
+  wm.bringToFront(wm.hwndFromBuffer(window.getNativeWindowHandle()))
+  window.focus()
+}
+
 export function showHubFullscreen(): void {
   const window = getHub()
   if (!window) {

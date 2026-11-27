@@ -23,8 +23,18 @@ export function shouldSkipLauncher(game: Game): boolean {
   return game.realExePath!.toLowerCase().startsWith(folderOf(game.exePath).toLowerCase() + '\\')
 }
 
+/** Nom du magasin qui lance (ou installe) ce jeu, pour les messages à l'écran. Ex. "Riot Client". */
+export function storeName(game: Game): string {
+  if (game.launchKind === 'steam' || game.steamAppId) return 'Steam'
+  if (game.source === 'epic') return 'Epic Games'
+  if (game.source === 'battlenet') return 'Battle.net'
+  if (game.source === 'riot') return 'Riot Client'
+  if (game.source === 'gog') return 'GOG'
+  return 'Le magasin'
+}
+
 /**
- * Le jeu est-il lancé par un magasin (Steam, Epic Games, Battle.net) ?
+ * Le jeu est-il lancé par un magasin (Steam, Epic Games, Battle.net, Riot Client) ?
  * Dans ce cas, le programme qu'on démarre (steam.exe, le lien Epic, Battle.net.exe) n'est PAS le jeu :
  * on reconnaît le jeu à son dossier d'installation (gameFolder).
  */

@@ -17,6 +17,7 @@ import type { Game } from '@shared/types'
 import * as wm from './windowManager'
 import { addPlaytime, getGames, updateGame } from './library'
 import { isInside, samePath } from './launchLearning'
+import { isKnownLauncherExe } from './knownLaunchers'
 import { readSteamPlaytimes } from './steamPlaytime'
 
 const SCAN_INTERVAL = 10_000 // on regarde les programmes ouverts toutes les 10 s
@@ -71,13 +72,14 @@ export function isGameProcess(game: Game, path: string): boolean {
   // Le vrai .exe du jeu (connu à l'ajout, ou appris au premier lancement depuis Gamer Room)
   if (samePath(path, game.realExePath)) return true
 
-  // Reconnaissance par le dossier d'installation (on ignore les launchers, outils, anti-cheat…)
+  // Reconnaissance par le dossier d'installation (on ignore les launchers, outils, anti-cheat…,
+  // et les launchers connus comme le salon de League of Legends : voir knownLaunchers.ts)
   const inGameFolder = (): boolean =>
-    !!game.gameFolder && isInside(path, game.gameFolder) && !NOT_THE_GAME.test(basename(path))
+    !!game.gameFolder && isInside(path, game.gameFolder) && !NOT_THE_GAME.test(basename(path)) && !isKnownLauncherExe(path)
 
   switch (game.launchKind) {
     case 'steam':
-    case 'store': // Epic, Battle.net : comme Steam, on reconnaît le jeu à son dossier
+    case 'store': // Epic, Battle.net, Riot : comme Steam, on reconnaît le jeu à son dossier
       return inGameFolder()
     case 'launcher':
       // Le temps passé dans le launcher ne compte pas. Si on ne connaît pas encore le vrai jeu,

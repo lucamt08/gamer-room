@@ -15,6 +15,8 @@ import { applyBackgroundMode, isBackgroundMode, startedHidden } from './backgrou
 import { savePlaytimeNow, startPlaytimeTracker } from './playtimeTracker'
 import { startSteamInstallWatcher } from './steamInstalls'
 import { startEpicInstallWatcher } from './pcGames/epicInstalls'
+import { startRiotInstallWatcher } from './pcGames/riotInstalls'
+import { startBattleNetInstallWatcher } from './pcGames/battleNetInstalls'
 import { startGameSizes } from './gameSizes'
 import { startGuideButton } from './guideButton'
 import { hideOverlay, isOverlayOpen, registerOverlayIpc, toggleOverlay } from './gameOverlay'
@@ -61,6 +63,8 @@ app.whenReady().then(() => {
     (progress) => sendToHub(IPC.steamInstallProgress, progress)
   )
   startEpicInstallWatcher((game) => sendToHub(IPC.gameUpdated, game))
+  startRiotInstallWatcher((game) => sendToHub(IPC.gameUpdated, game))
+  startBattleNetInstallWatcher((game) => sendToHub(IPC.gameUpdated, game))
   startGameSizes((game) => sendToHub(IPC.gameUpdated, game))
   applyBackgroundMode()
 

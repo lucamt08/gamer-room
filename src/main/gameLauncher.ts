@@ -8,8 +8,8 @@
 //     sans son launcher, on ouvre le launcher et on s'en souvient (voir fallbackToLauncher) ;
 //  3. le hub RESTE affiché avec l'écran de chargement (phase 'starting') ;
 //  4. toutes les 0,5 s, on cherche :
-//     - la fenêtre d'un launcher → on la met devant l'écran de chargement pour qu'on clique
-//       sur "Jouer" (phase 'launcher') ;
+//     - la fenêtre d'un launcher → elle reste DERRIÈRE Gamer Room, dans la barre des tâches : on peut
+//       y aller pour cliquer sur "Jouer" (phase 'launcher', voir keepHubInFront) ;
 //     - la fenêtre du VRAI jeu → plein écran sans bordure, puis on cache le hub (phase 'playing') ;
 //       au premier lancement, on retient quel .exe l'a ouverte (voir launchLearning.ts) ;
 //  5. toutes les secondes, on vérifie si le jeu tourne encore ;
@@ -31,9 +31,11 @@ import * as wm from './windowManager'
 import { ensureLaunchInfo, updateGame } from './library'
 import { removeRunAsAdmin } from './compatFlags'
 import { fixNameIfFromLauncher, isInside, learnFromGameWindow, samePath } from './launchLearning'
-import { getHub } from './hub'
+import { bringHubToFront, getHub } from './hub'
 import { prepareForGame } from './flawless'
 import { BATTLE_NET_RETRY_DELAY, ensureBattleNetReady, isBattleNetLaunch } from './pcGames/battleNetLaunch'
+import { isKnownLauncherExe } from './knownLaunchers'
+import { isRiotLaunch, requestRiotLaunch } from './pcGames/riotLaunch'
 
 // Réglages du suivi (en millisecondes)
 const SEARCH_TIMEOUT = 30_000 // jeu "normal" : on cherche la fenêtre pendant 30 s max
@@ -62,6 +64,10 @@ interface Session {
   gameWindow: wm.Hwnd | null
   /** La dernière fenêtre de launcher mise au premier plan. */
   launcherWindow: wm.Hwnd | null
+  /** Dernière fois qu'on a vu une fenêtre de launcher ouverte (0 = jamais). */
+  launcherSeenAt: number
+  /** Fenêtres de launchers déjà remises derrière Gamer Room (une seule fois chacune, voir keepHubInFront). */
+  pushedBack: Set<wm.Hwnd>
   /** Fenêtres présentes avant le lancement. */
   windowsBeforeLaunch: Set<wm.Hwnd>
   /** La recherche de fenêtre est-elle terminée (trouvée et stable, ou délai dépassé) ? */
@@ -149,6 +155,11 @@ export async function launchGame(gameToLaunch: Game): Promise<void> {
   await startGame(gameToLaunch)
   if (warning && session) sendState(session, { message: warning })
   if (session && isBattleNetLaunch(gameToLaunch)) scheduleBattleNetRetry(session)
+  // Jeu Riot : Riot ne lance plus le jeu tout seul, on le lui demande (voir riotLaunch.ts)
+  const s = session as Session | null
+  if (s && isRiotLaunch(gameToLaunch)) {
+    void requestRiotLaunch(gameToLaunch, () => session !== s || s.gameWindow !== null || gameProcessStarted(s, false))
+  }
 }
 
 /**
@@ -166,13 +177,21 @@ function scheduleBattleNetRetry(s: Session): void {
   s.timers.push(timer)
 }
 
-/** Un programme du dossier du jeu tourne-t-il déjà (le jeu démarre, même sans fenêtre pour l'instant) ? */
-function gameProcessStarted(s: Session): boolean {
+/** Une fenêtre de launcher était-elle encore ouverte il y a moins de 3 s ? (voir startWindowSearch) */
+function launcherOpen(s: Session): boolean {
+  return s.launcherSeenAt > 0 && Date.now() - s.launcherSeenAt < 3_000
+}
+
+/**
+ * Un programme du dossier du jeu tourne-t-il déjà (le jeu démarre, même sans fenêtre pour l'instant) ?
+ * `includeLaunchers` = false : on ne compte pas les launchers connus (ex. le salon de League of Legends).
+ */
+function gameProcessStarted(s: Session, includeLaunchers = true): boolean {
   const folder = s.game.gameFolder
   if (!folder) return false
   for (const process of wm.snapshotProcesses().values()) {
     const path = pathOf(s, process.pid)
-    if (path && isInside(path, folder)) return true
+    if (path && isInside(path, folder) && (includeLaunchers || !isKnownLauncherExe(path))) return true
   }
   return false
 }
@@ -231,6 +250,8 @@ function startGame(gameToLaunch: Game): Promise<void> {
         gamePids: new Set(),
         gameWindow: null,
         launcherWindow: null,
+        launcherSeenAt: 0,
+        pushedBack: new Set(),
         windowsBeforeLaunch,
         searchDone: false,
         startedAt: Date.now(),
@@ -319,14 +340,17 @@ function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.Win
   const tree = wm.getProcessTree(s.rootPid, undefined, launchTime(s))
   const biggestFirst = (list: wm.WindowInfo[]): wm.WindowInfo[] => list.sort((a, b) => area(b) - area(a))
 
-  // Jeu Steam, Epic ou Battle.net : un programme de son dossier dont le nom contient "launcher" est le launcher
-  // de l'éditeur (ex. le REDlauncher de The Witcher 3), pas le jeu… sauf s'il couvre l'écran.
+  // Jeu Steam, Epic, Battle.net ou Riot : dans le dossier du jeu, ces programmes sont des launchers, pas le jeu :
+  //  - un launcher connu (voir knownLaunchers.ts), ex. le salon de League of Legends (LeagueClientUx.exe) ;
+  //  - un programme dont le nom contient "launcher" (ex. le REDlauncher de The Witcher 3)… sauf s'il couvre l'écran.
   const inSteamFolder = (w: wm.WindowInfo): boolean => {
     const path = pathOf(s, w.pid)
     return launchedByStore(g) && !!path && !!g.gameFolder && isInside(path, g.gameFolder)
   }
-  const isSteamLauncher = (w: wm.WindowInfo): boolean =>
-    inSteamFolder(w) && /launch/i.test(pathOf(s, w.pid) ?? '') && !coversScreen(w)
+  const isSteamLauncher = (w: wm.WindowInfo): boolean => {
+    const path = pathOf(s, w.pid) ?? ''
+    return inSteamFolder(w) && (isKnownLauncherExe(path) || (/launch/i.test(path) && !coversScreen(w)))
+  }
 
   // 1. Fenêtres du vrai jeu, reconnues par le chemin de leur .exe
   const isRealGame = (w: wm.WindowInfo): boolean =>
@@ -359,6 +383,29 @@ function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.Win
     (w) => w !== game && ((g.launchKind === 'launcher' && tree.has(w.pid)) || isSteamLauncher(w))
   )
   return { game, launcher: biggestFirst(launchers)[0] ?? null }
+}
+
+/**
+ * Pendant le lancement, Gamer Room reste la fenêtre visible : si un launcher passe au premier plan
+ * (Riot Client, Battle.net, Epic, Steam, le launcher de l'éditeur, le salon de League of Legends…),
+ * on remet Gamer Room devant. Le launcher reste ouvert derrière, dans la barre des tâches.
+ *
+ * Une seule fois par fenêtre : si le joueur va lui-même sur le launcher (barre des tâches) pour cliquer
+ * sur « Jouer », on le laisse faire.
+ *
+ * Ce qui compte comme launcher : la fenêtre de launcher trouvée par findWindows, ou une fenêtre d'un
+ * launcher connu (voir knownLaunchers.ts), où qu'il soit installé.
+ */
+function keepHubInFront(s: Session, launcher: wm.WindowInfo | null): void {
+  const foreground = wm.getForegroundWindow()
+  if (!foreground || s.pushedBack.has(foreground)) return
+  const pid = wm.getWindowPid(foreground)
+  if (pid === process.pid) return // c'est déjà Gamer Room
+  const isLauncher = foreground === launcher?.hwnd || isKnownLauncherExe(pathOf(s, pid))
+  if (!isLauncher) return
+  s.pushedBack.add(foreground)
+  console.log(`[launcher] Launcher au premier plan (${pathOf(s, pid) ?? pid}) : Gamer Room repasse devant`)
+  bringHubToFront()
 }
 
 /** Cache le hub une fois l'écran de chargement resté affiché assez longtemps. */
@@ -408,16 +455,22 @@ function startWindowSearch(s: Session): void {
     try {
       const found = findWindows(s)
 
-      // Fenêtre de launcher : on la met devant l'écran de chargement (une fois par fenêtre)
+      // Un launcher est ouvert (ex. le salon de League of Legends, où l'on attend une partie) :
+      // on continue d'attendre le jeu tant qu'il reste ouvert (le délai repart de zéro)
+      if (found.launcher && !found.game) s.launcherSeenAt = Date.now()
+
+      // Fenêtre de launcher : on la retient (l'écran de chargement indique qu'il faut peut-être y cliquer sur « Jouer »)
       if (!found.game && found.launcher && found.launcher.hwnd !== s.launcherWindow) {
         console.log(`[launcher] Fenêtre de launcher : "${found.launcher.title}"`)
         s.launcherWindow = found.launcher.hwnd
-        wm.bringToFront(found.launcher.hwnd)
         if (s.phase === 'starting') {
           s.phase = 'launcher'
           sendState(s)
         }
       }
+
+      // Un launcher passe devant Gamer Room : on le remet derrière (il reste dans la barre des tâches)
+      if (!found.game) keepHubInFront(s, found.launcher)
 
       if (found.game) {
         const { hwnd, pid, title } = found.game
@@ -448,7 +501,7 @@ function startWindowSearch(s: Session): void {
         }
       }
 
-      if (Date.now() - s.startedAt > timeout) {
+      if (Date.now() - Math.max(s.startedAt, s.launcherSeenAt) > timeout) {
         if (!s.gameWindow) {
           console.warn(`[launcher] Aucune fenêtre de jeu trouvée après ${timeout / 1000} s`)
           // On cache quand même le hub : le jeu est peut-être là, mais pas reconnu
@@ -494,6 +547,11 @@ function startProcessWatch(s: Session): void {
       // Jeu "normal" ou relais : on garde l'ancienne règle (tous les processus du lancement comptent)
       const launchAlive = !isSlowStart(s.game) && [...s.knownPids].some((pid) => processes.has(pid))
       alive = gameAlive || launchAlive
+    } else if (launchedByStore(s.game)) {
+      // Jeu lancé par un magasin, pas encore de fenêtre : le programme qu'on a lancé (Steam, Riot Client…) peut
+      // rester ouvert sans le jeu. On regarde donc plutôt si le launcher du jeu (ex. le salon de League of Legends)
+      // est encore ouvert, ou si un programme du dossier du jeu tourne.
+      alive = launcherOpen(s) || gameProcessStarted(s)
     } else {
       alive = [...s.knownPids].some((pid) => processes.has(pid))
     }
@@ -507,7 +565,9 @@ function startProcessWatch(s: Session): void {
       return
     }
 
-    const launcherGaveUp = s.game.launchKind === 'launcher' && !s.gameWindow && deadChecks >= LAUNCHER_CLOSED_DELAY
+    // Launcher fermé sans lancer le jeu (launcher de l'éditeur, ou salon d'un jeu de magasin comme League of Legends)
+    const hadLauncher = s.game.launchKind === 'launcher' || (launchedByStore(s.game) && s.launcherWindow !== null)
+    const launcherGaveUp = hadLauncher && !s.gameWindow && deadChecks >= LAUNCHER_CLOSED_DELAY
     if ((deadChecks >= 2 && (s.searchDone || s.gameWindow)) || launcherGaveUp) {
       console.log(`[launcher] "${s.game.name}" fermé`)
       endSession(launcherGaveUp ? 'Launcher fermé sans lancer le jeu' : undefined)

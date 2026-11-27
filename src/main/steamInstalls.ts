@@ -13,6 +13,8 @@ import { getGame, getGames, updateGame } from './library'
 import { findSteamFolder, readManifests } from './steamLibrary'
 import { readAppInfo } from './steamAppInfo'
 import { epicInstallUrl, epicUrlFromArgs } from './pcGames/epicGames'
+import { openRiotInstall } from './pcGames/riotGames'
+import { battleNetInstallUrl } from './pcGames/battleNetGames'
 
 const CHECK_INTERVAL = 5_000 // on relit les fichiers de Steam toutes les 5 s
 
@@ -22,15 +24,22 @@ let lastProgress = '{}'
 /**
  * Ouvre la fenêtre d'installation du magasin pour ce jeu :
  *  - Steam : steam://install/<numéro du jeu> ;
- *  - Epic Games : le lien du launcher Epic avec action=install (voir pcGames/epicGames.ts).
+ *  - Epic Games : le lien du launcher Epic avec action=install (voir pcGames/epicGames.ts) ;
+ *  - Riot Games : le Riot Client s'ouvre sur la page du jeu, avec son bouton « Installer » (voir pcGames/riotGames.ts) ;
+ *  - Battle.net : le lien battlenet://<code> ouvre Battle.net sur la page du jeu (voir pcGames/battleNetGames.ts).
  */
 export async function installGame(gameId: string): Promise<void> {
   const game = getGame(gameId)
   const epicUrl = game?.source === 'epic' ? epicUrlFromArgs(game.args) : null
+  const battleNetUrl = game?.source === 'battlenet' && game.storeId ? battleNetInstallUrl(game.storeId) : null
   if (game?.steamAppId) {
     await shell.openExternal(`steam://install/${game.steamAppId}`)
   } else if (epicUrl) {
     await shell.openExternal(epicInstallUrl(epicUrl))
+  } else if (game?.source === 'riot' && game.storeId) {
+    openRiotInstall(game.storeId)
+  } else if (battleNetUrl) {
+    await shell.openExternal(battleNetUrl)
   } else {
     throw new Error("Ce jeu ne peut pas être installé depuis Gamer Room.")
   }

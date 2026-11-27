@@ -80,14 +80,17 @@ export interface Game {
   sizeCheckedAt?: string
   /** D'où vient le jeu quand il a été trouvé par « + Jeux du PC » (voir pcGames.ts). Absent = ajouté à la main ou Steam. */
   source?: GameSource
-  /** Identifiant du jeu chez son magasin (Epic : AppName, Battle.net : uid, GOG : gameID), pour éviter les doublons. */
+  /**
+   * Identifiant du jeu chez son magasin (Epic : AppName, Battle.net : uid, GOG : gameID,
+   * Riot : "<produit>.<version>" ex. "valorant.live"), pour éviter les doublons.
+   */
   storeId?: string
 }
 
 export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam' | 'store'
 
 /** Où un jeu du PC a été trouvé. 'pc' = détection générale (jeu sans launcher). */
-export type GameSource = 'epic' | 'battlenet' | 'gog' | 'pc'
+export type GameSource = 'epic' | 'battlenet' | 'gog' | 'riot' | 'pc'
 
 /** Un jeu trouvé sur le PC par « + Jeux du PC » (pas encore forcément dans Gamer Room). */
 export interface DetectedGame {
@@ -101,7 +104,7 @@ export interface DetectedGame {
   exePath: string
   /** Taille du dossier si on la connaît déjà (magasins), sinon null. */
   sizeBytes: number | null
-  /** false = jeu de la bibliothèque du magasin pas installé (Epic). Absent = installé. */
+  /** false = jeu de la bibliothèque du magasin pas installé (Epic, Riot). Absent = installé. */
   installed?: boolean
   /**
    * Détection générale seulement : 'high' = c'est sûrement un jeu (proposé coché),
