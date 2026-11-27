@@ -13,6 +13,8 @@ import { fixLauncherNamesAtStartup } from './launchLearning'
 import { createHub, sendToHub, showHub, showHubFullscreen } from './hub'
 import { applyBackgroundMode, isBackgroundMode, startedHidden } from './background'
 import { savePlaytimeNow, startPlaytimeTracker } from './playtimeTracker'
+import { startSteamInstallWatcher } from './steamInstalls'
+import { startGameSizes } from './gameSizes'
 import { startGuideButton } from './guideButton'
 import { hideOverlay, isOverlayOpen, registerOverlayIpc, toggleOverlay } from './gameOverlay'
 import { getPlayingGame, initGameLauncher, isGameRunning } from './gameLauncher'
@@ -52,6 +54,12 @@ app.whenReady().then(() => {
 
   // Compteur de temps de jeu + icône près de l'horloge / démarrage avec Windows (si l'option est activée)
   startPlaytimeTracker((game) => sendToHub(IPC.gameUpdated, game))
+  // Jeux Steam : installé ou non, taille, téléchargements en cours. Autres jeux : taille de leur dossier.
+  startSteamInstallWatcher(
+    (game) => sendToHub(IPC.gameUpdated, game),
+    (progress) => sendToHub(IPC.steamInstallProgress, progress)
+  )
+  startGameSizes((game) => sendToHub(IPC.gameUpdated, game))
   applyBackgroundMode()
 
   // Bouton Guide (Xbox) / PS (PlayStation) de la manette

@@ -105,7 +105,7 @@ export default function GameBox({ game, offset, onSelect }: Props) {
   } as CSSProperties
 
   return (
-    <div className={`cf-item${selected ? ' selected' : ''}`} style={style}>
+    <div className={`cf-item${selected ? ' selected' : ''}${game.installed === false ? ' not-installed' : ''}`} style={style}>
       {/* Toute la boîte est cliquable : un clic la sélectionne */}
       <div
         ref={tilt.ref}
@@ -147,6 +147,8 @@ export default function GameBox({ game, offset, onSelect }: Props) {
               <div className="box-shade" />
               {/* Badge "NOUVEAU" en haut à droite pour les jeux ajoutés il y a moins de 24 h */}
               {isNewGame(game.addedAt) && <span className="box-badge-new">NOUVEAU</span>}
+              {/* Jeu de la bibliothèque Steam pas installé : jaquette grisée + badge */}
+              {game.installed === false && <span className="box-badge-not-installed">NON INSTALLÉ</span>}
             </div>
           </div>
         </div>

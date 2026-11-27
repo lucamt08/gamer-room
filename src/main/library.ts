@@ -146,7 +146,11 @@ export function addSteamGames(entries: SteamGameEntry[], steamExe: string): Game
       launchKind: 'steam',
       realExePath: null,
       gameFolder: entry.installDir,
-      steamAppId: entry.appId
+      steamAppId: entry.appId,
+      // Jeu de la bibliothèque pas installé : bouton « Installer », taille estimée
+      installed: entry.installed,
+      sizeBytes: entry.sizeBytes || null,
+      sizeIsEstimate: !entry.installed
     }
     load().push(game)
     added.push(game)

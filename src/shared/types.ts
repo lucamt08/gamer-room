@@ -65,6 +65,17 @@ export interface Game {
    *  - sinon            : la clé d'un correctif choisi à la main, ex. "FWS_Plugins/Persona5Royal".
    */
   fwsModule?: string
+  /**
+   * Le jeu est-il installé ? Absent = oui (jeux ajoutés à la main, anciens jeux).
+   * false = jeu de la bibliothèque Steam pas (ou plus) installé : bouton « Installer » au lieu de « Jouer ».
+   */
+  installed?: boolean
+  /** Taille du jeu en octets : place sur le disque, ou taille estimée à installer. Absent/null = inconnue. */
+  sizeBytes?: number | null
+  /** La taille est-elle une estimation (jeu Steam pas encore installé) ? */
+  sizeIsEstimate?: boolean
+  /** Dernier calcul de la taille du dossier (jeux non-Steam, format ISO). */
+  sizeCheckedAt?: string
 }
 
 export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam'
@@ -73,11 +84,20 @@ export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam'
 export interface SteamGameEntry {
   appId: number
   name: string
-  /** Dossier d'installation, ex. D:\SteamLibrary\steamapps\common\Cyberpunk 2077 */
-  installDir: string
+  /** Dossier d'installation, ex. D:\SteamLibrary\steamapps\common\Cyberpunk 2077 (null si pas installé). */
+  installDir: string | null
+  /** Le jeu est-il installé sur ce PC ? */
+  installed: boolean
+  /** Taille en octets : place sur le disque si installé, sinon estimation (0 = inconnue). */
+  sizeBytes: number
+  /** Temps de jeu enregistré par Steam, en minutes. */
+  playtimeMinutes: number
   /** Déjà présent dans la bibliothèque ? */
   alreadyAdded: boolean
 }
+
+/** Avancement des téléchargements Steam en cours : id du jeu (Gamer Room) → pourcentage (0 à 100). */
+export type InstallProgress = Record<string, number>
 
 /** Les champs qu'on peut modifier depuis l'écran "Modifier". */
 export type GamePatch = Partial<Pick<Game, 'name' | 'args' | 'forceFullscreen' | 'skipLauncher' | 'playtimeSeconds' | 'fwsModule'>>

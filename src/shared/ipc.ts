@@ -11,9 +11,11 @@ export const IPC = {
   removeGame: 'library:remove',
   gameUpdated: 'library:game-updated', // main → renderer (un jeu a été corrigé en arrière-plan)
 
-  // Jeux Steam installés
+  // Jeux de la bibliothèque Steam (installés ou non)
   steamListGames: 'steam:list',
   steamAddGames: 'steam:add',
+  steamInstall: 'steam:install',
+  steamInstallProgress: 'steam:install-progress', // main → renderer (téléchargements en cours)
 
   // Lancement
   launchGame: 'game:launch',
