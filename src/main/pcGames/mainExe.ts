@@ -1,13 +1,15 @@
 // Trouver le .exe principal d'un dossier de jeu (celui qu'on double-cliquerait pour jouer).
 //
 // On regarde les .exe du dossier et de ses sous-dossiers (3 niveaux max), en ignorant :
-//  - les installateurs, désinstalleurs, redistribuables, rapports de plantage, anti-triche, launchers… ;
+//  - les installateurs, désinstalleurs, redistribuables, rapports de plantage, anti-triche, launchers…
+//    (dont les launchers connus, voir knownLaunchers.ts : LeagueClient.exe n'est pas le jeu) ;
 //  - les dossiers d'outils (_CommonRedist, DirectX, Support…).
 // Puis on garde le moins profond (un jeu Unreal a un petit .exe à la racine qui lance le vrai jeu :
 // c'est lui qu'on lance), et à égalité le plus gros.
 
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { isKnownLauncherExe } from '../knownLaunchers'
 
 /** .exe qui ne sont jamais le jeu : installateurs, rapports de plantage, anti-triche, launchers, outils… */
 export const NOT_THE_GAME =
@@ -32,7 +34,7 @@ export function findMainExe(folder: string): string | null {
       const path = join(dir, entry.name)
       if (entry.isDirectory()) {
         if (!SKIPPED_FOLDERS.test(entry.name)) walk(path, depth + 1)
-      } else if (entry.name.toLowerCase().endsWith('.exe') && !NOT_THE_GAME.test(entry.name)) {
+      } else if (entry.name.toLowerCase().endsWith('.exe') && !NOT_THE_GAME.test(entry.name) && !isKnownLauncherExe(entry.name)) {
         let size = 0
         try {
           size = statSync(path).size

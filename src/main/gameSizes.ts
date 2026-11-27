@@ -62,7 +62,8 @@ export async function updateGameSizes(onGameUpdated: (game: Game) => void): Prom
   running = true
   try {
     for (const game of getGames()) {
-      if (game.steamAppId) continue
+      // Jeux Steam : taille lue dans Steam. Jeux pas installés : pas de dossier à mesurer.
+      if (game.steamAppId || game.installed === false) continue
       const checkedAt = game.sizeCheckedAt ? new Date(game.sizeCheckedAt).getTime() : 0
       if (Date.now() - checkedAt < RECHECK_AFTER) continue
       const folder = folderToMeasure(game)

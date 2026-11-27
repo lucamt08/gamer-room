@@ -1,8 +1,10 @@
 // Composant principal : l'étagère + les fenêtres modales + la navigation.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Game, InstallProgress, RunningState, SgdbGame } from '@shared/types'
 import { formatPlaytime, formatSize, playtimeFromSteam, totalPlaytimeSeconds } from '@shared/playtime'
 import { DEFAULT_SCROLL_SETTINGS, type ScrollSettings } from '@shared/scroll'
+import { storeName } from '@shared/launch'
+import { gameOrigin, groupDuplicates, originLabel } from '@shared/duplicates'
 import Shelf from './components/Shelf'
 import GameEditor from './components/GameEditor'
 import CoverPicker from './components/CoverPicker'
@@ -111,17 +113,29 @@ export default function App() {
   /** Remplace un jeu dans la liste (après modification). */
   const replaceGame = (game: Game): void => setGames((list) => list.map((g) => (g.id === game.id ? game : g)))
 
-  const selectedGame: Game | undefined = games[selected]
+  // L'étagère : un seul exemplaire par jeu (ex. Rocket League sur Steam ET Epic → une boîte), voir shared/duplicates.ts
+  const { visible: shelfGames, otherCopies } = useMemo(() => groupDuplicates(games), [games])
+  const selectedGame: Game | undefined = shelfGames[selected]
+
+  // Jeu à sélectionner dès qu'il apparaît sur l'étagère (après un ajout)
+  const [selectId, setSelectId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!selectId) return
+    // Le jeu ajouté peut être caché derrière un autre exemplaire : on sélectionne alors celui affiché
+    const index = shelfGames.findIndex((g) => g.id === selectId || otherCopies.get(g.id)?.some((c) => c.id === selectId))
+    if (index >= 0) setSelected(index)
+    setSelectId(null)
+  }, [shelfGames, otherCopies, selectId])
 
   // --- Actions principales ---
   const launch = useCallback(
     async (game: Game | undefined) => {
       if (!game || running.running) return
       try {
-        // Jeu Steam ou Epic pas installé : « Jouer » devient « Installer » (le magasin ouvre sa fenêtre d'installation)
+        // Jeu Steam, Epic ou Riot pas installé : « Jouer » devient « Installer » (le magasin ouvre sa fenêtre d'installation)
         if (game.installed === false) {
           await window.api.installGame(game.id)
-          showToast(`${game.source === 'epic' ? 'Epic Games' : 'Steam'} ouvre l'installation de ${game.name}`)
+          showToast(`${storeName(game)} ouvre l'installation de ${game.name}`)
           return
         }
         await window.api.launchGame(game.id)
@@ -137,10 +151,8 @@ export default function App() {
     for (const path of paths) {
       try {
         const game = await window.api.addGame(path)
-        setGames((list) => {
-          setSelected(list.length) // on sélectionne le nouveau jeu
-          return [...list, game]
-        })
+        setGames((list) => [...list, game])
+        setSelectId(game.id) // on sélectionne le nouveau jeu
         showToast(`${game.name} ajouté`)
         await findCover(game)
       } catch (e) {
@@ -199,7 +211,7 @@ export default function App() {
 
     // 2. Sinon, on navigue dans l'étagère
     const columns = countColumns(shelfRef.current)
-    const last = games.length - 1
+    const last = shelfGames.length - 1
     switch (action) {
       case 'left':
         setSelected((i) => Math.max(0, i - 1))
@@ -266,8 +278,8 @@ export default function App() {
 
   // Si la liste rétrécit (suppression), on garde une sélection valide
   useEffect(() => {
-    if (selected > games.length - 1) setSelected(Math.max(0, games.length - 1))
-  }, [games.length, selected])
+    if (selected > shelfGames.length - 1) setSelected(Math.max(0, shelfGames.length - 1))
+  }, [shelfGames.length, selected])
 
   // --- Glisser-déposer ---
   const onDrop = (event: React.DragEvent): void => {
@@ -297,7 +309,7 @@ export default function App() {
         <h1 className="logo">
           GAMER<span>ROOM</span>
         </h1>
-        <span className="count">{games.length} jeu{games.length > 1 ? 'x' : ''}</span>
+        <span className="count">{shelfGames.length} jeu{shelfGames.length > 1 ? 'x' : ''}</span>
         <span className="spacer" />
         <button className="btn" onClick={pickAndAdd}>
           + Ajouter
@@ -305,7 +317,7 @@ export default function App() {
         <button className="btn" onClick={() => setModal({ kind: 'steam' })} title="Ajouter les jeux de ta bibliothèque Steam (installés ou non) et mettre la liste à jour">
           + Jeux Steam
         </button>
-        <button className="btn" onClick={() => setModal({ kind: 'pc' })} title="Ajouter les jeux Epic Games, Battle.net, GOG et les jeux sans launcher">
+        <button className="btn" onClick={() => setModal({ kind: 'pc' })} title="Ajouter les jeux Epic Games, Battle.net, GOG, Riot Games et les jeux sans launcher">
           + Jeux du PC
         </button>
         <button className="btn" onClick={() => setModal({ kind: 'settings' })}>
@@ -319,7 +331,7 @@ export default function App() {
       <main className="shelf-scroll">
         <Shelf
           ref={shelfRef}
-          games={games}
+          games={shelfGames}
           selectedIndex={selected}
           onSelect={setSelected}
           scroll={scroll}
@@ -330,6 +342,19 @@ export default function App() {
         <footer className="details">
           <div>
             <div className="details-title">{selectedGame.name}</div>
+            {/* D'où vient le jeu (Steam, Epic Games… ou jeu local sans launcher), et ses autres exemplaires */}
+            <div className="details-origin">
+              <span className={`origin-tag origin-${gameOrigin(selectedGame)}`}>{originLabel(selectedGame)}</span>
+              {otherCopies.get(selectedGame.id) && (
+                <span className="hint">
+                  Aussi :{' '}
+                  {otherCopies
+                    .get(selectedGame.id)!
+                    .map((copy) => originLabel(copy) + (copy.installed === false ? ' (non installé)' : ''))
+                    .join(', ')}
+                </span>
+              )}
+            </div>
             <div
               className="hint"
               title={playtimeFromSteam(selectedGame) ? 'Temps de jeu importé de Steam' : 'Temps de jeu compté par Gamer Room'}

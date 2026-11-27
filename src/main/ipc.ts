@@ -16,6 +16,7 @@ import { registerKillShortcut } from './shortcuts'
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater'
 import { applyBackgroundMode } from './background'
 import * as fws from './flawless'
+import { isAlreadyInLibrary } from '@shared/duplicates'
 
 /** La fenêtre qui a fait la demande (le hub). */
 function windowOf(event: IpcMainInvokeEvent): BrowserWindow {
@@ -63,8 +64,12 @@ export function registerIpcHandlers(): void {
 
   // --- Jeux Steam ---
   ipcMain.handle(IPC.steamListGames, () => {
-    const known = new Set(library.getGames().map((g) => g.steamAppId).filter((id): id is number => !!id))
-    return listSteamGames(known)
+    const games = library.getGames()
+    const known = new Set(games.map((g) => g.steamAppId).filter((id): id is number => !!id))
+    // Un jeu déjà présent sous le même nom (ex. Rocket League ajouté depuis Epic) compte aussi comme déjà ajouté
+    return listSteamGames(known).map((g) =>
+      g.alreadyAdded || !isAlreadyInLibrary(g.name, g.installed, games) ? g : { ...g, alreadyAdded: true }
+    )
   })
   ipcMain.handle(IPC.steamAddGames, (_event, appIds: number[]) => {
     const steamExe = findSteamExe()
@@ -75,7 +80,7 @@ export function registerIpcHandlers(): void {
     return library.addSteamGames(entries, steamExe)
   })
 
-  // --- Jeux du PC (Epic, Battle.net, GOG, jeux sans launcher) ---
+  // --- Jeux du PC (Epic, Battle.net, GOG, Riot, jeux sans launcher) ---
   ipcMain.handle(IPC.pcListGames, () => listPcGames())
   // L'interface n'envoie que des clés : on refait la recherche nous-mêmes (jamais de chemins venant de l'interface)
   ipcMain.handle(IPC.pcAddGames, (event, keys: string[]) => {
@@ -107,7 +112,7 @@ export function registerIpcHandlers(): void {
     library.updateGame(id, { lastPlayedAt: new Date().toISOString() })
   })
   ipcMain.handle(IPC.killGame, () => killRunningGame())
-  // Jeu Steam ou Epic pas installé : ouvre la fenêtre d'installation du magasin
+  // Jeu Steam, Epic ou Riot pas installé : ouvre la fenêtre d'installation du magasin
   ipcMain.handle(IPC.installGame, (_event, id: string) => installGame(id))
 
   // --- SteamGridDB ---

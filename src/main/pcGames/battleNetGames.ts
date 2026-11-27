@@ -1,4 +1,4 @@
-// Jeux Battle.net (Blizzard, Activision) installés.
+// Jeux Battle.net (Blizzard, Activision) : installés, et pas installés mais téléchargeables (voir CATALOG).
 //
 // Battle.net note ses jeux installés dans C:\ProgramData\Battle.net\Agent\product.db.
 // C'est un fichier BINAIRE au format "protobuf" (format de Google). Ce qui nous intéresse :
@@ -10,6 +10,9 @@
 // Lancement : Battle.net.exe --exec="launch <code>" lance directement le jeu par Battle.net.
 // Le code de lancement n'est pas toujours le code produit (Hearthstone : "hsb" → "WTCG") :
 // on utilise la liste ci-dessous, et pour un jeu inconnu de cette liste, on lance son .exe directement.
+//
+// Installation : le lien battlenet://<code de lancement> (ex. battlenet://Pro) ouvre Battle.net sur la page
+// du jeu, avec son bouton « Installer ». Le suivi installé / non installé est dans battleNetInstalls.ts.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join, normalize } from 'node:path'
@@ -42,14 +45,54 @@ const LAUNCH_CODES: Record<string, string> = {
   rtro: 'RTRO' // Blizzard Arcade Collection
 }
 
+/**
+ * Jeux proposés même s'ils ne sont pas installés (bouton « Installer ») :
+ *  - les jeux GRATUITS de Battle.net (tout compte peut les télécharger) ;
+ *  - et les jeux déjà installés un jour sur ce PC (Battle.net s'en souvient dans Battle.net.config).
+ * Battle.net ne garde pas la liste des jeux achetés sur le PC : un jeu payant jamais installé ici n'est pas proposé.
+ * uid = identifiant dans product.db et Battle.net.config, code = code produit (clé de LAUNCH_CODES).
+ */
+const CATALOG: { uid: string; code: string; name: string; free: boolean }[] = [
+  { uid: 'prometheus', code: 'pro', name: 'Overwatch 2', free: true },
+  { uid: 'hs_beta', code: 'hsb', name: 'Hearthstone', free: true },
+  { uid: 'heroes', code: 'hero', name: 'Heroes of the Storm', free: true },
+  { uid: 's2', code: 's2', name: 'StarCraft II', free: true },
+  { uid: 's1', code: 's1', name: 'StarCraft', free: true },
+  { uid: 'anbs', code: 'anbs', name: 'Diablo Immortal', free: true },
+  { uid: 'gryphon', code: 'gryphon', name: 'Warcraft Rumble', free: true },
+  { uid: 'auks', code: 'auks', name: 'Call of Duty', free: true }, // Warzone est gratuit
+  { uid: 'wow', code: 'wow', name: 'World of Warcraft', free: true }, // essai gratuit
+  { uid: 'diablo3', code: 'd3', name: 'Diablo III', free: false },
+  { uid: 'fenris', code: 'fenris', name: 'Diablo IV', free: false },
+  { uid: 'osi', code: 'osi', name: 'Diablo II: Resurrected', free: false },
+  { uid: 'w3', code: 'w3', name: 'Warcraft III: Reforged', free: false }
+]
+
 /** Entrées de product.db qui ne sont pas des jeux. */
 const NOT_GAMES = new Set(['agent', 'battle.net', 'bna'])
 
 /** Ce qu'il faut pour ajouter et lancer un jeu Battle.net. */
 export interface BattleNetGame extends DetectedGame {
   uid: string
+  /** Code produit, ex. "hsb" (Hearthstone). */
+  productCode: string
   /** Battle.net.exe et ses arguments pour lancer le jeu, ou null (on lancera le .exe du jeu). */
   launcher: { exe: string; args: string } | null
+}
+
+/** Commande Battle.net qui lance un jeu (les guillemets gardent "launch WTCG" en un seul argument). */
+function launchCommand(battleNetExe: string, launchCode: string): { exe: string; args: string } {
+  return { exe: battleNetExe, args: `"--exec=launch ${launchCode}"` }
+}
+
+/**
+ * Lien qui ouvre Battle.net sur la page d'un jeu (avec son bouton « Installer »), ex. battlenet://Pro.
+ * `uid` = identifiant du jeu (storeId dans Gamer Room). null si on ne connaît pas son code.
+ */
+export function battleNetInstallUrl(uid: string): string | null {
+  const code = CATALOG.find((c) => c.uid === uid)?.code
+  const launchCode = code ? LAUNCH_CODES[code] : undefined
+  return launchCode ? `battlenet://${launchCode}` : null
 }
 
 // ----------------------------------------------------------------------------
@@ -104,12 +147,11 @@ function text(fields: Field[], number: number): string {
 
 // ----------------------------------------------------------------------------
 
-/** Tous les jeux Battle.net installés (liste vide si Battle.net n'est pas installé). */
-export function listBattleNetGames(): BattleNetGame[] {
+/** Les entrées de product.db (jeux installés + Battle.net lui-même), ou null si Battle.net n'est pas installé. */
+function readInstalls(): { uid: string; code: string; folder: string }[] | null {
   const file = join(process.env['ProgramData'] ?? 'C:\\ProgramData', 'Battle.net', 'Agent', 'product.db')
-  let installs: { uid: string; code: string; folder: string }[]
   try {
-    installs = decode(readFileSync(file))
+    return decode(readFileSync(file))
       .filter((f) => f.field === 1 && f.bytes)
       .map((f) => {
         const install = decode(f.bytes!)
@@ -121,12 +163,22 @@ export function listBattleNetGames(): BattleNetGame[] {
         }
       })
   } catch {
-    return [] // Battle.net pas installé, ou fichier illisible
+    return null // Battle.net pas installé, ou fichier illisible
   }
+}
 
-  // Battle.net.exe : dans le dossier de l'entrée "battle.net"
+/** Battle.net.exe (dans le dossier de l'entrée "battle.net" de product.db), ou null. */
+function findBattleNetExe(installs: { uid: string; folder: string }[]): string | null {
   const client = installs.find((i) => i.uid === 'battle.net')
-  const battleNetExe = client ? join(client.folder, 'Battle.net.exe') : null
+  const exe = client ? join(client.folder, 'Battle.net.exe') : null
+  return exe && existsSync(exe) ? exe : null
+}
+
+/** Tous les jeux Battle.net installés (liste vide si Battle.net n'est pas installé). */
+export function listBattleNetGames(): BattleNetGame[] {
+  const installs = readInstalls()
+  if (!installs) return []
+  const battleNetExe = findBattleNetExe(installs)
 
   const games: BattleNetGame[] = []
   for (const install of installs) {
@@ -145,9 +197,50 @@ export function listBattleNetGames(): BattleNetGame[] {
       confidence: 'high',
       reasons: ['Battle.net'],
       uid: install.uid,
-      // Les guillemets gardent "launch WTCG" en un seul argument : --exec=launch WTCG
-      launcher: launchCode && battleNetExe && existsSync(battleNetExe) ? { exe: battleNetExe, args: `"--exec=launch ${launchCode}"` } : null
+      productCode: install.code,
+      launcher: launchCode && battleNetExe ? launchCommand(battleNetExe, launchCode) : null
     })
   }
   return games
+}
+
+/** uid des jeux déjà installés un jour sur ce PC (section "Games" de %APPDATA%\Battle.net\Battle.net.config). */
+function previouslyInstalled(): Set<string> {
+  try {
+    const file = join(process.env['APPDATA'] ?? '', 'Battle.net', 'Battle.net.config')
+    const config = JSON.parse(readFileSync(file, 'utf8')) as { Games?: Record<string, unknown> }
+    return new Set(Object.keys(config.Games ?? {}))
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * Jeux Battle.net PAS installés qu'on peut télécharger : les jeux gratuits, et ceux déjà installés un jour
+ * sur ce PC (donc sur le compte). `installed` = les jeux installés (on ne les propose pas deux fois).
+ */
+export function listBattleNetNotInstalled(installed: BattleNetGame[]): BattleNetGame[] {
+  const installs = readInstalls()
+  const battleNetExe = installs ? findBattleNetExe(installs) : null
+  if (!battleNetExe) return [] // pas de Battle.net : impossible d'installer
+  const known = previouslyInstalled()
+  return CATALOG.filter(
+    (c) =>
+      (c.free || known.has(c.uid)) &&
+      LAUNCH_CODES[c.code] &&
+      !installed.some((g) => g.uid === c.uid || g.productCode === c.code)
+  ).map((c) => ({
+    key: `battlenet:${c.uid}`,
+    source: 'battlenet' as const,
+    name: c.name,
+    folder: '',
+    exePath: '',
+    sizeBytes: null,
+    confidence: 'high' as const,
+    reasons: ['Battle.net'],
+    installed: false,
+    uid: c.uid,
+    productCode: c.code,
+    launcher: launchCommand(battleNetExe, LAUNCH_CODES[c.code])
+  }))
 }

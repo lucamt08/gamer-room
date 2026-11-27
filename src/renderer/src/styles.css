@@ -688,6 +688,31 @@ kbd {
   text-shadow: 0 4px 30px rgba(0, 0, 0, 0.9);
 }
 
+/* D'où vient le jeu : petite étiquette colorée (Steam, Epic Games… ou jeu local) */
+.details-origin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 2px;
+}
+
+.origin-tag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  white-space: nowrap;
+}
+.origin-steam { background: rgba(102, 192, 244, 0.18); border-color: rgba(102, 192, 244, 0.5); }
+.origin-epic { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.4); }
+.origin-battlenet { background: rgba(20, 140, 255, 0.2); border-color: rgba(20, 140, 255, 0.55); }
+.origin-gog { background: rgba(160, 90, 220, 0.2); border-color: rgba(160, 90, 220, 0.55); }
+.origin-riot { background: rgba(235, 0, 41, 0.2); border-color: rgba(235, 0, 41, 0.55); }
+.origin-pc { background: rgba(61, 220, 151, 0.15); border-color: rgba(61, 220, 151, 0.45); }
+
 .details .hint {
   font-size: 13px;
   margin-top: 4px;
