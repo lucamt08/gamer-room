@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   startFullscreen: false,
   trackOutsideApp: true, // compter le temps de jeu même hors de Gamer Room (démarre avec Windows)
   fwsPath: '', // dossier de Flawless Widescreen : '' = recherche automatique
+  gameFolders: [], // dossiers de jeux choisis à la main (en plus des dossiers habituels comme D:\Games)
   guideButton: true, // bouton Guide / PS : ouvrir Gamer Room, appui long en jeu = menu sur le côté
   ...DEFAULT_SCROLL_SETTINGS // molette, glisser, manette (voir shared/scroll.ts)
 }

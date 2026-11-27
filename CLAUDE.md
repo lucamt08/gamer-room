@@ -33,6 +33,15 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   steamAppInfo.ts  Lit le cache de Steam (appinfo.vdf binaire + librarycache) : toute la bibliothèque, même non installée
   steamInstalls.ts Bouton « Installer » (steam://install) + suivi installé / non installé / téléchargement
   gameSizes.ts     Taille du dossier des jeux non-Steam (en arrière-plan, une fois par jour)
+  pcGames/         « + Jeux du PC » : jeux hors Steam
+    pcGames.ts       Rassemble les sources, évite les doublons, ajoute les jeux choisis
+    epicGames.ts     Jeux Epic installés (.item) et non installés (cache catcache.bin), lien du launcher Epic
+    epicInstalls.ts  Suivi installé / non installé des jeux Epic (toutes les 10 s)
+    battleNetLaunch.ts Ouvre Battle.net et attend qu'il soit prêt avant de lancer un jeu
+    battleNetGames.ts Jeux Battle.net (product.db, protobuf), lancés par Battle.net.exe --exec
+    gogGames.ts      Jeux GOG (registre), lancés directement
+    pcGameDetect.ts  Détection générale des .exe : suspects → exclusions → note « est-ce un jeu ? » → nom
+    mainExe.ts       Trouve le .exe principal d'un dossier de jeu
   flawless.ts      Flawless Widescreen : trouve FWS, lit ses correctifs, coche « Fix Enabled » avant le jeu
   adminTasks.ts    Tâches planifiées Windows pour lancer un programme en admin (autorisation donnée une fois)
   windowManager.ts TOUT le code Win32 (processus, fenêtres, borderless). N'importe pas Electron.

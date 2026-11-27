@@ -18,6 +18,7 @@ import type {
   Settings,
   SteamGameEntry,
   InstallProgress,
+  DetectedGame,
   UpdateStatus
 } from '@shared/types'
 
@@ -41,8 +42,14 @@ const api = {
   steamListGames: (): Promise<SteamGameEntry[]> => ipcRenderer.invoke(IPC.steamListGames),
   /** Ajoute les jeux Steam choisis (par leur numéro Steam). */
   steamAddGames: (appIds: number[]): Promise<Game[]> => ipcRenderer.invoke(IPC.steamAddGames, appIds),
-  /** Ouvre la fenêtre d'installation de Steam pour un jeu pas installé. */
-  steamInstall: (id: string): Promise<void> => ipcRenderer.invoke(IPC.steamInstall, id),
+  /** Jeux du PC hors Steam (Epic, Battle.net, GOG, jeux sans launcher) pas encore dans Gamer Room. */
+  pcListGames: (): Promise<{ games: DetectedGame[]; alreadyAdded: number }> => ipcRenderer.invoke(IPC.pcListGames),
+  /** Ajoute les jeux du PC choisis (par leur clé). */
+  pcAddGames: (keys: string[]): Promise<Game[]> => ipcRenderer.invoke(IPC.pcAddGames, keys),
+  /** Choisir un dossier de jeux en plus, puis relancer la recherche. */
+  pcAddFolder: (): Promise<{ games: DetectedGame[]; alreadyAdded: number }> => ipcRenderer.invoke(IPC.pcAddFolder),
+  /** Ouvre la fenêtre d'installation du magasin (Steam ou Epic) pour un jeu pas installé. */
+  installGame: (id: string): Promise<void> => ipcRenderer.invoke(IPC.installGame, id),
   /** Avancement des téléchargements Steam en cours (id du jeu → pourcentage). */
   onInstallProgress: (cb: (progress: InstallProgress) => void) => listen(IPC.steamInstallProgress, cb),
   /** Chemin complet d'un fichier glissé-déposé dans la fenêtre. */

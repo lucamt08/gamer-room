@@ -26,13 +26,14 @@ import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { Game, RunningState } from '@shared/types'
-import { shouldSkipLauncher } from '@shared/launch'
+import { launchedByStore, shouldSkipLauncher } from '@shared/launch'
 import * as wm from './windowManager'
 import { ensureLaunchInfo, updateGame } from './library'
 import { removeRunAsAdmin } from './compatFlags'
 import { fixNameIfFromLauncher, isInside, learnFromGameWindow, samePath } from './launchLearning'
 import { getHub } from './hub'
 import { prepareForGame } from './flawless'
+import { BATTLE_NET_RETRY_DELAY, ensureBattleNetReady, isBattleNetLaunch } from './pcGames/battleNetLaunch'
 
 // Réglages du suivi (en millisecondes)
 const SEARCH_TIMEOUT = 30_000 // jeu "normal" : on cherche la fenêtre pendant 30 s max
@@ -108,7 +109,7 @@ export function parseArgs(line: string): string[] {
 
 /** Le jeu passe-t-il par un intermédiaire qui peut prendre du temps (launcher, Steam) ? */
 function isSlowStart(game: Game): boolean {
-  return game.launchKind === 'launcher' || game.launchKind === 'steam'
+  return game.launchKind === 'launcher' || launchedByStore(game)
 }
 
 /** Prévient l'interface de l'état du lancement. */
@@ -133,12 +134,47 @@ export async function launchGame(gameToLaunch: Game): Promise<void> {
       () => notify({ running: true, gameId: gameToLaunch.id, phase: 'flawless' }),
       () => prep.cancelled
     )
+    // Jeu Battle.net : Battle.net doit être ouvert pour que la commande lance vraiment le jeu
+    if (!prep.cancelled) {
+      await ensureBattleNetReady(
+        gameToLaunch,
+        () => notify({ running: true, gameId: gameToLaunch.id, phase: 'battlenet' }),
+        () => prep.cancelled
+      )
+    }
   } finally {
     preparing = null
   }
   if (prep.cancelled) return // « Annuler » cliqué pendant la préparation
   await startGame(gameToLaunch)
   if (warning && session) sendState(session, { message: warning })
+  if (session && isBattleNetLaunch(gameToLaunch)) scheduleBattleNetRetry(session)
+}
+
+/**
+ * Jeu Battle.net : si le jeu n'a toujours pas démarré 20 s après la commande de lancement
+ * (Battle.net encore en train de se connecter…), on renvoie la commande une fois.
+ */
+function scheduleBattleNetRetry(s: Session): void {
+  const timer = setTimeout(() => {
+    if (session !== s || s.gameWindow || gameProcessStarted(s)) return
+    console.log("[battle.net] Le jeu n'a pas démarré : on renvoie la commande de lancement")
+    startProcess(s.game.exePath, s.game.args, s.game.workingDir).once('error', (error) =>
+      console.warn('[battle.net] Nouvel envoi impossible', error.message)
+    )
+  }, BATTLE_NET_RETRY_DELAY)
+  s.timers.push(timer)
+}
+
+/** Un programme du dossier du jeu tourne-t-il déjà (le jeu démarre, même sans fenêtre pour l'instant) ? */
+function gameProcessStarted(s: Session): boolean {
+  const folder = s.game.gameFolder
+  if (!folder) return false
+  for (const process of wm.snapshotProcesses().values()) {
+    const path = pathOf(s, process.pid)
+    if (path && isInside(path, folder)) return true
+  }
+  return false
 }
 
 /** Démarre le jeu lui-même (après la préparation éventuelle de Flawless Widescreen). */
@@ -283,11 +319,11 @@ function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.Win
   const tree = wm.getProcessTree(s.rootPid, undefined, launchTime(s))
   const biggestFirst = (list: wm.WindowInfo[]): wm.WindowInfo[] => list.sort((a, b) => area(b) - area(a))
 
-  // Jeu Steam : un programme de son dossier dont le nom contient "launcher" est le launcher
+  // Jeu Steam, Epic ou Battle.net : un programme de son dossier dont le nom contient "launcher" est le launcher
   // de l'éditeur (ex. le REDlauncher de The Witcher 3), pas le jeu… sauf s'il couvre l'écran.
   const inSteamFolder = (w: wm.WindowInfo): boolean => {
     const path = pathOf(s, w.pid)
-    return g.launchKind === 'steam' && !!path && !!g.gameFolder && isInside(path, g.gameFolder)
+    return launchedByStore(g) && !!path && !!g.gameFolder && isInside(path, g.gameFolder)
   }
   const isSteamLauncher = (w: wm.WindowInfo): boolean =>
     inSteamFolder(w) && /launch/i.test(pathOf(s, w.pid) ?? '') && !coversScreen(w)
@@ -298,7 +334,7 @@ function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.Win
   let games = windows.filter((w) => isRealGame(w) && wm.looksLikeMainWindow(w))
 
   // 2. Sinon, les fenêtres du processus lancé et de ses enfants
-  if (games.length === 0 && g.launchKind !== 'steam') {
+  if (games.length === 0 && !launchedByStore(g)) {
     const fromTree = windows.filter((w) => tree.has(w.pid) && wm.looksLikeMainWindow(w))
     if (g.launchKind === 'launcher') {
       // Launcher : ses propres fenêtres ne sont pas le jeu… sauf si elles couvrent l'écran
@@ -449,7 +485,7 @@ function startProcessWatch(s: Session): void {
 
     const processes = wm.snapshotProcesses()
     // On ajoute les nouveaux descendants du processus lancé, et ceux du jeu
-    if (s.game.launchKind !== 'steam') for (const pid of wm.getProcessTree(s.rootPid, processes, launchTime(s))) s.knownPids.add(pid)
+    if (!launchedByStore(s.game)) for (const pid of wm.getProcessTree(s.rootPid, processes, launchTime(s))) s.knownPids.add(pid)
     for (const pid of [...s.gamePids]) for (const child of wm.getProcessTree(pid, processes, launchTime(s))) s.gamePids.add(child)
 
     let alive: boolean
@@ -518,7 +554,7 @@ export function killRunningGame(): void {
   if (!s) return
   console.log(`[launcher] Fermeture forcée de "${s.game.name}"`)
   const processes = wm.snapshotProcesses()
-  const roots = s.game.launchKind === 'steam' ? s.gamePids : new Set([...s.knownPids, ...s.gamePids])
+  const roots = launchedByStore(s.game) ? s.gamePids : new Set([...s.knownPids, ...s.gamePids])
   // On ajoute les enfants apparus depuis la dernière vérification (même règles que getProcessTree)
   const targets = new Set<number>()
   for (const pid of roots) for (const child of wm.getProcessTree(pid, processes, launchTime(s))) targets.add(child)

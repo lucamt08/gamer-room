@@ -1,4 +1,4 @@
-// Installation des jeux Steam depuis Gamer Room, et suivi de l'état installé / non installé.
+// Installation des jeux Steam (et Epic) depuis Gamer Room, et suivi de l'état installé / non installé des jeux Steam.
 //
 //  - Bouton « Installer » : on ouvre le lien steam://install/<numéro du jeu>. Steam affiche alors sa
 //    propre fenêtre d'installation (choix du disque…). Gamer Room ne télécharge rien elle-même.
@@ -12,17 +12,27 @@ import type { Game, InstallProgress } from '@shared/types'
 import { getGame, getGames, updateGame } from './library'
 import { findSteamFolder, readManifests } from './steamLibrary'
 import { readAppInfo } from './steamAppInfo'
+import { epicInstallUrl } from './pcGames/epicGames'
 
 const CHECK_INTERVAL = 5_000 // on relit les fichiers de Steam toutes les 5 s
 
 let timer: NodeJS.Timeout | null = null
 let lastProgress = '{}'
 
-/** Ouvre la fenêtre d'installation de Steam pour ce jeu. */
-export async function installSteamGame(gameId: string): Promise<void> {
+/**
+ * Ouvre la fenêtre d'installation du magasin pour ce jeu :
+ *  - Steam : steam://install/<numéro du jeu> ;
+ *  - Epic Games : le lien du launcher Epic avec action=install (voir pcGames/epicGames.ts).
+ */
+export async function installGame(gameId: string): Promise<void> {
   const game = getGame(gameId)
-  if (!game?.steamAppId) throw new Error("Ce jeu n'est pas un jeu Steam.")
-  await shell.openExternal(`steam://install/${game.steamAppId}`)
+  if (game?.steamAppId) {
+    await shell.openExternal(`steam://install/${game.steamAppId}`)
+  } else if (game?.source === 'epic' && game.args.includes('com.epicgames.launcher://')) {
+    await shell.openExternal(epicInstallUrl(game.args.replace(/"/g, '')))
+  } else {
+    throw new Error("Ce jeu ne peut pas être installé depuis Gamer Room.")
+  }
 }
 
 /**

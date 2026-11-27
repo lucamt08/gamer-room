@@ -14,7 +14,13 @@ export const IPC = {
   // Jeux de la bibliothèque Steam (installés ou non)
   steamListGames: 'steam:list',
   steamAddGames: 'steam:add',
-  steamInstall: 'steam:install',
+  installGame: 'game:install', // Steam ou Epic : ouvre l'installation dans le magasin
+
+  // Jeux du PC hors Steam (Epic, Battle.net, GOG, jeux sans launcher)
+  pcListGames: 'pc:list',
+  pcAddGames: 'pc:add',
+  pcAddFolder: 'pc:add-folder',
+
   steamInstallProgress: 'steam:install-progress', // main → renderer (téléchargements en cours)
 
   // Lancement

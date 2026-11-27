@@ -159,6 +159,17 @@ export function addSteamGames(entries: SteamGameEntry[], steamExe: string): Game
   return added
 }
 
+/**
+ * Ajoute un jeu déjà tout préparé (ex. jeu Epic pas installé : il n'a pas encore de .exe sur le PC).
+ * L'identifiant et la date d'ajout sont remplis ici.
+ */
+export function insertGame(fields: Omit<Game, 'id' | 'addedAt'>): Game {
+  const game: Game = { ...fields, id: randomUUID(), addedAt: new Date().toISOString() }
+  load().push(game)
+  save()
+  return game
+}
+
 /** Modifie un jeu (nom, arguments, option plein écran) et renvoie la version à jour. */
 export function updateGame(id: string, patch: GamePatch | Partial<Game>): Game {
   const game = getGame(id)
