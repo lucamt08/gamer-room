@@ -204,7 +204,7 @@ const SettingsPanel = forwardRef<HTMLDivElement, Props>(function SettingsPanel({
               value={settings.gamepadSpeed}
               onChange={(gamepadSpeed) => update({ gamepadSpeed })}
               valueText={settings.gamepadSpeed === 5 ? 'Moyen' : `${settings.gamepadSpeed} / 9`}
-              hint="Quand on maintient la croix ou le stick. 5 = moyen (la vitesse d'origine)."
+              hint="Quand on maintient la croix ou le stick. 5 = moyen (5 jeux par seconde)."
             />
             <label className="checkbox">
               <input
