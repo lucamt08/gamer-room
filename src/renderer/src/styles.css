@@ -1729,3 +1729,29 @@ html.overlay-window body {
   transform: scale(1.06);
   box-shadow: 0 0 24px rgba(111, 168, 255, 0.45);
 }
+
+/* Compteur de FPS de l'interface (touche F3, voir FpsCounter.tsx) */
+.fps-counter {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  font: 600 13px/1.4 Consolas, monospace;
+  pointer-events: none;
+}
+
+.fps-counter.good {
+  color: #4ade80;
+}
+
+.fps-counter.medium {
+  color: #fbbf24;
+}
+
+.fps-counter.bad {
+  color: var(--danger);
+}
