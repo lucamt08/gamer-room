@@ -40,7 +40,7 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   httpJson.ts      Téléchargement JSON (User-Agent) + cache des fiches (userData\game-info, 7 jours)
   gameSizes.ts     Taille du dossier des jeux non-Steam (en arrière-plan, une fois par jour)
   knownLaunchers.ts Liste des .exe de launchers connus (jamais « le jeu ») : détection, lancement, temps de jeu
-  pcGames/         « + Jeux du PC » : jeux hors Steam
+  pcGames/         « + Jeux de ce PC » : jeux hors Steam (la fenêtre PcImport.tsx affiche aussi Steam, en premier)
     pcGames.ts       Rassemble les sources, évite les doublons, ajoute les jeux choisis
     epicGames.ts     Jeux Epic installés (.item) et non installés (cache catcache.bin), lien du launcher Epic
     epicInstalls.ts  Suivi installé / non installé des jeux Epic (toutes les 10 s)

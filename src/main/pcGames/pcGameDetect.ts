@@ -3,7 +3,7 @@
 // Comme un détective, en 4 étapes :
 //  1. LES SUSPECTS : les .exe que Windows a reconnus comme des jeux (Game Bar / Mode Jeu, dans le registre
 //     HKCU\System\GameConfigStore\Children → MatchedExeFullPath), le .exe principal de chaque sous-dossier
-//     des dossiers de jeux (D:\Games, C:\Jeux… + ceux choisis dans « + Jeux du PC »), et les raccourcis du
+//     des dossiers de jeux (D:\Games, C:\Jeux… + ceux choisis dans « + Jeux de ce PC »), et les raccourcis du
 //     bureau et du menu Démarrer ;
 //  2. ON ÉCARTE : dossiers système, jeux Steam / Epic / Battle.net / GOG / Riot (gérés à part), jeux déjà dans
 //     Gamer Room, installateurs et outils, logiciels connus (éditeur Microsoft, Google, NVIDIA, Discord…) ;
@@ -150,7 +150,7 @@ function isExcluded(exe: string, exclusions: Exclusions): boolean {
     isKnownLauncherExe(name) || // les launchers eux-mêmes (ce ne sont pas des jeux)
     isInside(exe, systemRoot) ||
     lower.includes('\\windowsapps\\') || // applis du Microsoft Store (protégées)
-    lower.includes('\\steamapps\\') || // jeux Steam : gérés par « + Jeux Steam »
+    lower.includes('\\steamapps\\') || // jeux Steam : lus dans Steam (voir steamAppInfo.ts)
     exclusions.folders.some((folder) => isInside(exe, folder))
   )
 }

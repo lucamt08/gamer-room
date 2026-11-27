@@ -11,7 +11,6 @@ import CoverPicker from './components/CoverPicker'
 import SettingsPanel from './components/SettingsPanel'
 import UpdateBanner from './components/UpdateBanner'
 import LoadingScreen from './components/LoadingScreen'
-import SteamImport from './components/SteamImport'
 import PcImport from './components/PcImport'
 import GameDetails from './components/GameDetails'
 import FpsCounter from './components/FpsCounter'
@@ -67,7 +66,6 @@ type ModalState =
   | { kind: 'edit'; gameId: string }
   | { kind: 'cover'; gameId: string; results?: SgdbGame[] }
   | { kind: 'settings' }
-  | { kind: 'steam' }
   | { kind: 'pc' }
 
 export default function App() {
@@ -176,7 +174,7 @@ export default function App() {
   /**
    * Recherche automatique de jaquette après un ajout.
    * `askIfUnsure` : ouvrir la fenêtre Jaquette quand plusieurs jeux correspondent
-   * (désactivé pour l'import Steam de plusieurs jeux d'un coup).
+   * (désactivé quand on importe plusieurs jeux d'un coup).
    */
   const findCover = async (game: Game, askIfUnsure = true): Promise<void> => {
     const result = await window.api.sgdbAutoCover(game.id)
@@ -203,7 +201,7 @@ export default function App() {
     if (path) await addPaths([path])
   }
 
-  /** Jeux ajoutés depuis une fenêtre d'import (Steam ou PC) : on les affiche, puis on cherche leurs jaquettes. */
+  /** Jeux ajoutés depuis la fenêtre « Jeux de ce PC » : on les affiche, puis on cherche leurs jaquettes. */
   const onImported = async (added: Game[]): Promise<void> => {
     setModal(null)
     if (added.length === 0) return
@@ -433,11 +431,12 @@ export default function App() {
         <button className="btn" onClick={pickAndAdd}>
           + Ajouter
         </button>
-        <button className="btn" onClick={() => setModal({ kind: 'steam' })} title="Ajouter les jeux de ta bibliothèque Steam (installés ou non) et mettre la liste à jour">
-          + Jeux Steam
-        </button>
-        <button className="btn" onClick={() => setModal({ kind: 'pc' })} title="Ajouter les jeux Epic Games, Battle.net, GOG, Riot Games et les jeux sans launcher">
-          + Jeux du PC
+        <button
+          className="btn"
+          onClick={() => setModal({ kind: 'pc' })}
+          title="Ajouter tous les jeux de ce PC, quel que soit le launcher : Steam, Epic Games, Battle.net, GOG, Riot Games et jeux sans launcher"
+        >
+          + Jeux de ce PC
         </button>
         <button className="btn" onClick={() => setModal({ kind: 'settings' })}>
           Paramètres
@@ -584,7 +583,6 @@ export default function App() {
         />
       )}
       {modal?.kind === 'settings' && <SettingsPanel ref={modalRef} onClose={() => setModal(null)} onSaved={setScroll} />}
-      {modal?.kind === 'steam' && <SteamImport ref={modalRef} onClose={() => setModal(null)} onAdded={onImported} />}
       {modal?.kind === 'pc' && <PcImport ref={modalRef} onClose={() => setModal(null)} onAdded={onImported} />}
     </div>
   )

@@ -78,7 +78,7 @@ export interface Game {
   sizeIsEstimate?: boolean
   /** Dernier calcul de la taille du dossier (jeux non-Steam, format ISO). */
   sizeCheckedAt?: string
-  /** D'où vient le jeu quand il a été trouvé par « + Jeux du PC » (voir pcGames.ts). Absent = ajouté à la main ou Steam. */
+  /** D'où vient le jeu quand il a été trouvé par « + Jeux de ce PC » (voir pcGames.ts). Absent = ajouté à la main ou Steam. */
   source?: GameSource
   /**
    * Identifiant du jeu chez son magasin (Epic : AppName, Battle.net : uid, GOG : gameID,
@@ -92,7 +92,7 @@ export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam' | 'store'
 /** Où un jeu du PC a été trouvé. 'pc' = détection générale (jeu sans launcher). */
 export type GameSource = 'epic' | 'battlenet' | 'gog' | 'riot' | 'pc'
 
-/** Un jeu trouvé sur le PC par « + Jeux du PC » (pas encore forcément dans Gamer Room). */
+/** Un jeu trouvé sur le PC par « + Jeux de ce PC » (pas encore forcément dans Gamer Room). */
 export interface DetectedGame {
   /** Identifiant unique de la proposition, ex. "epic:Sugar" ou "pc:d:\games\rimworld\rimworldwin64.exe". */
   key: string
