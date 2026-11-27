@@ -13,6 +13,12 @@ let lastTick = 0
 /** Écart minimum entre deux clics (ms). */
 const MIN_GAP_MS = 28
 
+// Le moteur audio met ~50 ms à démarrer : on le prépare dès que l'appli n'a rien à faire,
+// plutôt qu'au premier cran (sinon le tout premier défilement a un petit à-coup)
+requestIdleCallback(() => {
+  context ??= new AudioContext()
+})
+
 /** Joue une note courte qui s'éteint vite. */
 function blip(ctx: AudioContext, output: AudioNode, t: number, from: number, to: number, level: number, length: number): void {
   const osc = ctx.createOscillator()

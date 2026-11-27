@@ -19,7 +19,7 @@ import type { NavAction } from './input/actions'
 import { useKeyboard } from './input/useKeyboard'
 import { useGamepad } from './input/useGamepad'
 import { handleModalNav } from './input/focusNav'
-import { cleanError, countColumns } from './utils'
+import { cleanError } from './utils'
 import { playTick } from './sound'
 
 /**
@@ -301,7 +301,7 @@ export default function App() {
     }
 
     // 4. Sinon, on navigue dans l'étagère
-    const columns = countColumns(shelfRef.current)
+    const columns = Math.max(1, shelfGames.length) // l'étagère n'a qu'une rangée
     switch (action) {
       case 'left':
         setSelected((i) => Math.max(0, i - 1))

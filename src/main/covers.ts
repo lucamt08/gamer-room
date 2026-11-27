@@ -25,15 +25,21 @@ export function coverPath(fileName: string): string {
 /** À appeler AVANT que l'appli soit prête (app.whenReady). */
 export function registerCoverSchemeAsPrivileged(): void {
   protocol.registerSchemesAsPrivileged([
-    { scheme: COVER_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } }
+    // corsEnabled : l'étagère 3D (WebGL) a besoin d'images « autorisées » pour en faire des textures
+    { scheme: COVER_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
   ])
 }
 
 /** À appeler APRÈS app.whenReady : sert les fichiers du dossier covers. */
 export function handleCoverProtocol(): void {
-  protocol.handle(COVER_SCHEME, (request) => {
+  protocol.handle(COVER_SCHEME, async (request) => {
     const fileName = decodeURIComponent(new URL(request.url).pathname)
-    return net.fetch(pathToFileURL(coverPath(fileName)).toString())
+    const file = await net.fetch(pathToFileURL(coverPath(fileName)).toString())
+    // On autorise l'interface à utiliser l'image comme texture WebGL (voir ShelfScene.ts).
+    // Sans risque : ce protocole ne sert que les jaquettes, et seulement à notre propre interface.
+    const headers = new Headers(file.headers)
+    headers.set('Access-Control-Allow-Origin', '*')
+    return new Response(file.body, { status: file.status, headers })
   })
 }
 

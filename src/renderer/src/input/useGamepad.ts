@@ -34,7 +34,7 @@ const REPEAT_DELAY = 350 // ms avant que la direction se répète quand on la ma
 /** Accélération : à chaque répétition, le délai est multiplié par ce nombre (plus petit = accélère plus vite). */
 const ACCELERATION_FACTOR = 0.85
 /** Accélération : délai minimum entre deux répétitions (ms). */
-const MIN_REPEAT_RATE = 25
+const MIN_REPEAT_RATE = 50
 
 /** Réglages venant des Paramètres (onglet Manette). */
 export interface GamepadOptions {
@@ -44,9 +44,13 @@ export interface GamepadOptions {
   acceleration: boolean
 }
 
-/** Délai (ms) entre deux répétitions selon la vitesse : 1 = 200 ms, 5 = 120 ms (moyen, d'origine), 9 = 40 ms. */
+/**
+ * Délai (ms) entre deux répétitions selon la vitesse : 1 = 400 ms, 5 = 200 ms (moyen), 9 = 100 ms.
+ * Chaque cran de réglage multiplie la vitesse par le même facteur : les écarts se sentent pareil
+ * en bas et en haut. (Avant : 1 = 200 ms, 9 = 40 ms, beaucoup trop rapide depuis l'étagère WebGL.)
+ */
 function repeatRateFor(speed: number): number {
-  return 200 - (Math.min(9, Math.max(1, speed)) - 1) * 20
+  return Math.round(200 * 2 ** ((5 - Math.min(9, Math.max(1, speed))) / 4))
 }
 
 /** Direction actuellement indiquée par le stick gauche, ou null. */

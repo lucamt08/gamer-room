@@ -18,6 +18,16 @@ interface Options {
   sensitivity: number
   /** Fait avancer la sélection de `steps` jeux (négatif = vers la gauche). */
   moveBy: (steps: number) => void
+  /**
+   * Pendant le glisser : où en est la souris entre deux crans (fraction de jeu, -1..1),
+   * pour que l'étagère suive le curseur en continu. Appelé avec (0, false) à la fin.
+   */
+  onDrag?: (offset: number, dragging: boolean) => void
+  /**
+   * Fin du glisser, avec où en était la souris entre deux crans. Renvoie `true` si l'étagère part
+   * sur son élan (elle s'occupe alors de la suite), `false` pour s'arrêter au jeu le plus proche.
+   */
+  onRelease?: (offset: number) => boolean
 }
 
 interface DragState {
@@ -29,7 +39,7 @@ interface DragState {
   active: boolean
 }
 
-export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
+export function useDragScroll({ enabled, sensitivity, moveBy, onDrag, onRelease }: Options) {
   const drag = useRef<DragState | null>(null)
   const justDragged = useRef(false)
   const pixelsPerGame = PIXELS_PER_GAME[Math.min(5, Math.max(1, Math.round(sensitivity))) - 1]
@@ -46,6 +56,7 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
     // Le bouton a été relâché sans qu'on reçoive le « relâché » (hors de la fenêtre, Alt+Tab…) :
     // on arrête le glisser, sinon le curseur reste en « main fermée »
     if ((event.buttons & 1) === 0) {
+      if (d.active) onDrag?.(0, false) // l'étagère se recale sur le jeu sélectionné
       endDrag(event)
       return
     }
@@ -65,6 +76,7 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
       d.lastStepX -= steps * pixelsPerGame
       moveBy(steps)
     }
+    onDrag?.((d.lastStepX - event.clientX) / pixelsPerGame, true)
   }
 
   function onPointerUp(event: PointerEvent<HTMLElement>): void {
@@ -72,6 +84,13 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
     if (!d?.active) {
       drag.current = null
       return
+    }
+    const rest = (d.lastStepX - event.clientX) / pixelsPerGame
+    // Lâché en plein mouvement (un « coup » de souris) : l'étagère continue sur son élan (voir useMomentum.ts)
+    if (!onRelease?.(rest)) {
+      // Lâché à plus de la moitié du chemin vers le jeu suivant : on y va (comme un téléphone)
+      if (Math.abs(rest) >= 0.5) moveBy(Math.sign(rest))
+      onDrag?.(0, false)
     }
     justDragged.current = true
     endDrag(event)
@@ -91,7 +110,9 @@ export function useDragScroll({ enabled, sensitivity, moveBy }: Options) {
 
   // Windows a repris la souris (fenêtre qui perd le focus, jeu lancé…) : le glisser s'arrête
   function onLostPointerCapture(event: PointerEvent<HTMLElement>): void {
-    if (drag.current?.active) endDrag(event)
+    if (!drag.current?.active) return
+    onDrag?.(0, false) // l'étagère se recale sur le jeu sélectionné
+    endDrag(event)
   }
 
   // Appelé AVANT les clics des boîtes : on annule le clic de fin de glisser

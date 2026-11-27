@@ -30,6 +30,10 @@ if (!app.requestSingleInstanceLock()) {
 // Doit être fait AVANT que l'appli soit prête
 registerCoverSchemeAsPrivileged()
 
+// PC avec deux cartes graphiques (celle du processeur + une carte de jeu) : Windows donne souvent
+// la plus faible aux applis normales, et l'étagère 3D rame. On demande la carte la plus puissante.
+app.commandLine.appendSwitch('force_high_performance_gpu')
+
 // Gamer Room relancée (raccourci, menu Démarrer…) alors qu'elle tourne déjà : on ouvre le hub
 app.on('second-instance', () => showHub())
 
