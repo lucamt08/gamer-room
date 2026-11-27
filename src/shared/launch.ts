@@ -22,3 +22,12 @@ export function shouldSkipLauncher(game: Game): boolean {
   if (typeof game.skipLauncher === 'boolean') return game.skipLauncher
   return game.realExePath!.toLowerCase().startsWith(folderOf(game.exePath).toLowerCase() + '\\')
 }
+
+/**
+ * Le jeu est-il lancé par un magasin (Steam, Epic Games, Battle.net) ?
+ * Dans ce cas, le programme qu'on démarre (steam.exe, le lien Epic, Battle.net.exe) n'est PAS le jeu :
+ * on reconnaît le jeu à son dossier d'installation (gameFolder).
+ */
+export function launchedByStore(game: Game): boolean {
+  return game.launchKind === 'steam' || game.launchKind === 'store'
+}

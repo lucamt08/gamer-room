@@ -7,7 +7,8 @@ import { IPC } from '@shared/ipc'
 import * as library from './library'
 import * as sgdb from './steamgriddb'
 import { launchGame, killRunningGame } from './gameLauncher'
-import { installSteamGame } from './steamInstalls'
+import { installGame } from './steamInstalls'
+import { addPcGames, listPcGames } from './pcGames/pcGames'
 import { updateGameSizes } from './gameSizes'
 import { getSettings, saveSettings } from './settings'
 import { findSteamExe, listSteamGames } from './steamLibrary'
@@ -74,6 +75,29 @@ export function registerIpcHandlers(): void {
     return library.addSteamGames(entries, steamExe)
   })
 
+  // --- Jeux du PC (Epic, Battle.net, GOG, jeux sans launcher) ---
+  ipcMain.handle(IPC.pcListGames, () => listPcGames())
+  // L'interface n'envoie que des clés : on refait la recherche nous-mêmes (jamais de chemins venant de l'interface)
+  ipcMain.handle(IPC.pcAddGames, (event, keys: string[]) => {
+    const added = addPcGames(keys.filter((k) => typeof k === 'string'))
+    // Taille du dossier des nouveaux jeux, calculée en arrière-plan
+    updateGameSizes((updated) => event.sender.send(IPC.gameUpdated, updated))
+    return added
+  })
+  // Ajouter un dossier où chercher des jeux (ex. E:\MesJeux), puis relancer la recherche
+  ipcMain.handle(IPC.pcAddFolder, async (event) => {
+    const result = await dialog.showOpenDialog(windowOf(event), {
+      title: 'Dossier où sont rangés tes jeux',
+      properties: ['openDirectory']
+    })
+    if (!result.canceled) {
+      const folders = getSettings().gameFolders
+      const folder = result.filePaths[0]
+      if (!folders.some((f) => f.toLowerCase() === folder.toLowerCase())) saveSettings({ gameFolders: [...folders, folder] })
+    }
+    return listPcGames()
+  })
+
   // --- Lancement ---
   ipcMain.handle(IPC.launchGame, async (_event, id: string) => {
     const game = library.getGame(id)
@@ -83,8 +107,8 @@ export function registerIpcHandlers(): void {
     library.updateGame(id, { lastPlayedAt: new Date().toISOString() })
   })
   ipcMain.handle(IPC.killGame, () => killRunningGame())
-  // Jeu Steam pas installé : ouvre la fenêtre d'installation de Steam
-  ipcMain.handle(IPC.steamInstall, (_event, id: string) => installSteamGame(id))
+  // Jeu Steam ou Epic pas installé : ouvre la fenêtre d'installation du magasin
+  ipcMain.handle(IPC.installGame, (_event, id: string) => installGame(id))
 
   // --- SteamGridDB ---
   // Recherche avec correction automatique du nom si rien n'est trouvé

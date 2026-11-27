@@ -14,6 +14,7 @@ import { createHub, sendToHub, showHub, showHubFullscreen } from './hub'
 import { applyBackgroundMode, isBackgroundMode, startedHidden } from './background'
 import { savePlaytimeNow, startPlaytimeTracker } from './playtimeTracker'
 import { startSteamInstallWatcher } from './steamInstalls'
+import { startEpicInstallWatcher } from './pcGames/epicInstalls'
 import { startGameSizes } from './gameSizes'
 import { startGuideButton } from './guideButton'
 import { hideOverlay, isOverlayOpen, registerOverlayIpc, toggleOverlay } from './gameOverlay'
@@ -59,6 +60,7 @@ app.whenReady().then(() => {
     (game) => sendToHub(IPC.gameUpdated, game),
     (progress) => sendToHub(IPC.steamInstallProgress, progress)
   )
+  startEpicInstallWatcher((game) => sendToHub(IPC.gameUpdated, game))
   startGameSizes((game) => sendToHub(IPC.gameUpdated, game))
   applyBackgroundMode()
 

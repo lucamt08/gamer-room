@@ -77,6 +77,7 @@ export function isGameProcess(game: Game, path: string): boolean {
 
   switch (game.launchKind) {
     case 'steam':
+    case 'store': // Epic, Battle.net : comme Steam, on reconnaît le jeu à son dossier
       return inGameFolder()
     case 'launcher':
       // Le temps passé dans le launcher ne compte pas. Si on ne connaît pas encore le vrai jeu,

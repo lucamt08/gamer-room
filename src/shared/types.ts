@@ -33,7 +33,9 @@ export interface Game {
    *  - 'game'     : le jeu lui-même ;
    *  - 'launcher' : un launcher avec une fenêtre (REDlauncher de Cyberpunk, Longshot…) ;
    *  - 'relay'    : un petit .exe sans fenêtre qui démarre aussitôt le vrai jeu (b1.exe de Wukong) ;
-   *  - 'steam'    : un jeu Steam, lancé par Steam.
+   *  - 'steam'    : un jeu Steam, lancé par Steam ;
+   *  - 'store'    : un jeu lancé par son magasin (Epic Games, Battle.net), comme pour Steam : on reconnaît
+   *                 le jeu à son dossier (`gameFolder`), pas au processus qu'on a lancé.
    * Absent pour les jeux ajoutés avant cette version (détecté au prochain lancement).
    */
   launchKind?: LaunchKind
@@ -76,9 +78,39 @@ export interface Game {
   sizeIsEstimate?: boolean
   /** Dernier calcul de la taille du dossier (jeux non-Steam, format ISO). */
   sizeCheckedAt?: string
+  /** D'où vient le jeu quand il a été trouvé par « + Jeux du PC » (voir pcGames.ts). Absent = ajouté à la main ou Steam. */
+  source?: GameSource
+  /** Identifiant du jeu chez son magasin (Epic : AppName, Battle.net : uid, GOG : gameID), pour éviter les doublons. */
+  storeId?: string
 }
 
-export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam'
+export type LaunchKind = 'game' | 'launcher' | 'relay' | 'steam' | 'store'
+
+/** Où un jeu du PC a été trouvé. 'pc' = détection générale (jeu sans launcher). */
+export type GameSource = 'epic' | 'battlenet' | 'gog' | 'pc'
+
+/** Un jeu trouvé sur le PC par « + Jeux du PC » (pas encore forcément dans Gamer Room). */
+export interface DetectedGame {
+  /** Identifiant unique de la proposition, ex. "epic:Sugar" ou "pc:d:\games\rimworld\rimworldwin64.exe". */
+  key: string
+  source: GameSource
+  name: string
+  /** Dossier du jeu. */
+  folder: string
+  /** Le .exe du jeu lui-même. */
+  exePath: string
+  /** Taille du dossier si on la connaît déjà (magasins), sinon null. */
+  sizeBytes: number | null
+  /** false = jeu de la bibliothèque du magasin pas installé (Epic). Absent = installé. */
+  installed?: boolean
+  /**
+   * Détection générale seulement : 'high' = c'est sûrement un jeu (proposé coché),
+   * 'medium' = peut-être (proposé décoché, à vérifier).
+   */
+  confidence: 'high' | 'medium'
+  /** Pourquoi on pense que c'est un jeu, ex. ["moteur Unity", "reconnu par Windows"]. */
+  reasons: string[]
+}
 
 /** Un jeu Steam installé sur le PC (pour l'import). */
 export interface SteamGameEntry {
@@ -118,6 +150,8 @@ export interface Settings {
   trackOutsideApp: boolean
   /** Dossier de Flawless Widescreen choisi à la main ('' = recherche automatique). */
   fwsPath: string
+  /** Dossiers où chercher des jeux (en plus des dossiers habituels comme D:\Games), voir pcGameDetect.ts. */
+  gameFolders: string[]
 
   // --- Clavier / souris ---
   /** Molette : niveau de vitesse, de 1 (très lent) à 5 (très rapide) ; 3 = moyen (vitesse d'origine). */
@@ -202,9 +236,10 @@ export interface RunningState {
    *  - 'starting' : le jeu (ou son launcher) démarre, on attend sa fenêtre ;
    *  - 'launcher' : la fenêtre d'un launcher est ouverte, il faut y cliquer sur "Jouer" ;
    *  - 'playing'  : la fenêtre du jeu est là, le hub est caché ;
-   *  - 'flawless' : avant le jeu, Gamer Room démarre Flawless Widescreen avec le correctif activé.
+   *  - 'flawless' : avant le jeu, Gamer Room démarre Flawless Widescreen avec le correctif activé ;
+   *  - 'battlenet' : avant un jeu Battle.net, Gamer Room ouvre Battle.net et attend qu'il soit prêt.
    */
-  phase?: 'flawless' | 'starting' | 'launcher' | 'playing'
+  phase?: 'flawless' | 'battlenet' | 'starting' | 'launcher' | 'playing'
   /** Message court pour l'utilisateur (ex. "Plein écran appliqué"). */
   message?: string
   /** Le jeu à jour, quand le lancement a appris quelque chose (vrai .exe, nouveau nom, jaquette…). */

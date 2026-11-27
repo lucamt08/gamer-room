@@ -10,6 +10,7 @@ import SettingsPanel from './components/SettingsPanel'
 import UpdateBanner from './components/UpdateBanner'
 import LoadingScreen from './components/LoadingScreen'
 import SteamImport from './components/SteamImport'
+import PcImport from './components/PcImport'
 import type { NavAction } from './input/actions'
 import { useKeyboard } from './input/useKeyboard'
 import { useGamepad } from './input/useGamepad'
@@ -59,6 +60,7 @@ type ModalState =
   | { kind: 'cover'; gameId: string; results?: SgdbGame[] }
   | { kind: 'settings' }
   | { kind: 'steam' }
+  | { kind: 'pc' }
 
 export default function App() {
   const [games, setGames] = useState<Game[]>([])
@@ -116,10 +118,10 @@ export default function App() {
     async (game: Game | undefined) => {
       if (!game || running.running) return
       try {
-        // Jeu Steam pas installé : « Jouer » devient « Installer » (Steam ouvre sa fenêtre d'installation)
+        // Jeu Steam ou Epic pas installé : « Jouer » devient « Installer » (le magasin ouvre sa fenêtre d'installation)
         if (game.installed === false) {
-          await window.api.steamInstall(game.id)
-          showToast(`Steam ouvre l'installation de ${game.name}`)
+          await window.api.installGame(game.id)
+          showToast(`${game.source === 'epic' ? 'Epic Games' : 'Steam'} ouvre l'installation de ${game.name}`)
           return
         }
         await window.api.launchGame(game.id)
@@ -177,12 +179,12 @@ export default function App() {
     if (path) await addPaths([path])
   }
 
-  /** Jeux Steam ajoutés depuis la fenêtre d'import : on les affiche, puis on cherche leurs jaquettes. */
-  const onSteamAdded = async (added: Game[]): Promise<void> => {
+  /** Jeux ajoutés depuis une fenêtre d'import (Steam ou PC) : on les affiche, puis on cherche leurs jaquettes. */
+  const onImported = async (added: Game[]): Promise<void> => {
     setModal(null)
     if (added.length === 0) return
     setGames((list) => [...list, ...added])
-    showToast(`${added.length} jeu${added.length > 1 ? 'x' : ''} Steam ajouté${added.length > 1 ? 's' : ''}`)
+    showToast(`${added.length} jeu${added.length > 1 ? 'x' : ''} ajouté${added.length > 1 ? 's' : ''}`)
     for (const game of added) await findCover(game, added.length === 1)
   }
 
@@ -303,6 +305,9 @@ export default function App() {
         <button className="btn" onClick={() => setModal({ kind: 'steam' })} title="Ajouter les jeux de ta bibliothèque Steam (installés ou non) et mettre la liste à jour">
           + Jeux Steam
         </button>
+        <button className="btn" onClick={() => setModal({ kind: 'pc' })} title="Ajouter les jeux Epic Games, Battle.net, GOG et les jeux sans launcher">
+          + Jeux du PC
+        </button>
         <button className="btn" onClick={() => setModal({ kind: 'settings' })}>
           Paramètres
         </button>
@@ -406,7 +411,8 @@ export default function App() {
         />
       )}
       {modal?.kind === 'settings' && <SettingsPanel ref={modalRef} onClose={() => setModal(null)} onSaved={setScroll} />}
-      {modal?.kind === 'steam' && <SteamImport ref={modalRef} onClose={() => setModal(null)} onAdded={onSteamAdded} />}
+      {modal?.kind === 'steam' && <SteamImport ref={modalRef} onClose={() => setModal(null)} onAdded={onImported} />}
+      {modal?.kind === 'pc' && <PcImport ref={modalRef} onClose={() => setModal(null)} onAdded={onImported} />}
     </div>
   )
 }
