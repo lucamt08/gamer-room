@@ -4,11 +4,12 @@
 //  - un jeu de Gamer Room vient d'être installé dans Epic → il devient jouable (dossier, vrai .exe, taille) ;
 //  - un jeu a été désinstallé dans Epic → il repasse en « Non installé » (bouton « Installer »).
 // (Epic n'écrit pas l'avancement du téléchargement : pas de pourcentage, contrairement à Steam.)
+// Il corrige aussi les jeux Epic ajoutés avant que Gamer Room n'ouvre le lien Epic avec rundll32 (voir epicGames.ts).
 
 import { basename } from 'node:path'
 import type { Game } from '@shared/types'
 import { getGames, updateGame } from '../library'
-import { listEpicGames } from './epicGames'
+import { epicLaunchCommand, epicUrlFromArgs, listEpicGames } from './epicGames'
 
 const CHECK_INTERVAL = 10_000
 
@@ -26,6 +27,9 @@ export function startEpicInstallWatcher(onGameUpdated: (game: Game) => void): vo
       for (const game of epicGames) {
         const found = installed.get(game.storeId!)
         const patch: Partial<Game> = {}
+        // Jeux ajoutés avec l'ancienne méthode (explorer.exe, qui ouvrait le dossier Documents) : on corrige
+        const url = epicUrlFromArgs(game.args)
+        if (url && basename(game.exePath).toLowerCase() === 'explorer.exe') Object.assign(patch, epicLaunchCommand(url))
         if (found) {
           if (game.installed === false) {
             console.log(`[epic] "${game.name}" est installé`)

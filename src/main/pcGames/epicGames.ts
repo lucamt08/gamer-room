@@ -7,7 +7,9 @@
 //
 // Les jeux Epic se lancent PAR le launcher (connexion au compte, anti-triche…) :
 //   com.epicgames.launcher://apps/<namespace>%3A<item>%3A<appName>?action=launch&silent=true
-// Gamer Room ouvre ce lien avec explorer.exe, puis reconnaît le jeu à son dossier (launchKind 'store').
+// Gamer Room ouvre ce lien avec « rundll32 url.dll,FileProtocolHandler » (la façon classique de Windows
+// d'ouvrir un lien de programme), puis reconnaît le jeu à son dossier (launchKind 'store').
+// ⚠️ Pas avec explorer.exe : lancé par un programme, il ignore le lien et ouvre le dossier Documents.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, normalize } from 'node:path'
@@ -80,9 +82,22 @@ function epicUrl(namespace: string, itemId: string, appName: string, action: 'la
   return `com.epicgames.launcher://apps/${id}?action=${action}${action === 'launch' ? '&silent=true' : ''}`
 }
 
+/** Le lien Epic contenu dans les arguments d'un jeu, ou null. */
+export function epicUrlFromArgs(args: string): string | null {
+  return /com\.epicgames\.launcher:\/\/[^\s"]+/.exec(args)?.[0] ?? null
+}
+
 /** Lien d'installation à partir du lien de lancement enregistré dans le jeu. */
 export function epicInstallUrl(launchUrl: string): string {
   return launchUrl.replace('action=launch&silent=true', 'action=install')
+}
+
+/** Programme et arguments qui ouvrent un lien Epic (au lieu d'explorer.exe, qui ouvre Documents). */
+export function epicLaunchCommand(launchUrl: string): { exePath: string; args: string } {
+  return {
+    exePath: join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'rundll32.exe'),
+    args: `url.dll,FileProtocolHandler ${launchUrl}`
+  }
 }
 
 /** Programmes du catalogue Epic qui ne sont pas des jeux à proposer. */

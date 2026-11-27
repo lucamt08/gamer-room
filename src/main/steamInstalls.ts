@@ -12,7 +12,7 @@ import type { Game, InstallProgress } from '@shared/types'
 import { getGame, getGames, updateGame } from './library'
 import { findSteamFolder, readManifests } from './steamLibrary'
 import { readAppInfo } from './steamAppInfo'
-import { epicInstallUrl } from './pcGames/epicGames'
+import { epicInstallUrl, epicUrlFromArgs } from './pcGames/epicGames'
 
 const CHECK_INTERVAL = 5_000 // on relit les fichiers de Steam toutes les 5 s
 
@@ -26,10 +26,11 @@ let lastProgress = '{}'
  */
 export async function installGame(gameId: string): Promise<void> {
   const game = getGame(gameId)
+  const epicUrl = game?.source === 'epic' ? epicUrlFromArgs(game.args) : null
   if (game?.steamAppId) {
     await shell.openExternal(`steam://install/${game.steamAppId}`)
-  } else if (game?.source === 'epic' && game.args.includes('com.epicgames.launcher://')) {
-    await shell.openExternal(epicInstallUrl(game.args.replace(/"/g, '')))
+  } else if (epicUrl) {
+    await shell.openExternal(epicInstallUrl(epicUrl))
   } else {
     throw new Error("Ce jeu ne peut pas être installé depuis Gamer Room.")
   }

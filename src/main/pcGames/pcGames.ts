@@ -12,7 +12,7 @@ import type { DetectedGame, Game } from '@shared/types'
 import { addGameFromPath, getGames, insertGame, updateGame } from '../library'
 import { getSettings } from '../settings'
 import { readExeInfo } from '../exeInfo'
-import { listEpicGames, listEpicNotInstalled, type EpicGame } from './epicGames'
+import { epicLaunchCommand, listEpicGames, listEpicNotInstalled, type EpicGame } from './epicGames'
 import { listBattleNetGames, type BattleNetGame } from './battleNetGames'
 import { listGogGames, type GogGame } from './gogGames'
 import { detectPcGames, gameRoot } from './pcGameDetect'
@@ -109,8 +109,7 @@ export function addPcGames(keys: string[]): Game[] {
         added.push(
           insertGame({
             name: found.name,
-            exePath: join(process.env['SystemRoot'] ?? 'C:\\Windows', 'explorer.exe'),
-            args: `"${found.launchUrl}"`,
+            ...epicLaunchCommand(found.launchUrl),
             workingDir: '',
             coverFile: null,
             steamGridDbId: null,
@@ -125,9 +124,9 @@ export function addPcGames(keys: string[]): Game[] {
           })
         )
       } else if ('launchUrl' in found) {
-        // Epic : on ouvre le lien du launcher Epic avec l'Explorateur Windows
-        const explorer = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'explorer.exe')
-        added.push(addStoreGame(found, explorer, `"${found.launchUrl}"`, found.appName))
+        // Epic : on ouvre le lien du launcher Epic (voir epicLaunchCommand)
+        const command = epicLaunchCommand(found.launchUrl)
+        added.push(addStoreGame(found, command.exePath, command.args, found.appName))
       } else if ('uid' in found && found.launcher) {
         // Battle.net : Battle.net.exe --exec="launch <code>"
         added.push(addStoreGame(found, found.launcher.exe, found.launcher.args, found.uid))
