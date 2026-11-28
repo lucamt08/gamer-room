@@ -27,6 +27,7 @@ export const IPC = {
   // Lancement
   launchGame: 'game:launch',
   killGame: 'game:kill',
+  resumeGame: 'game:resume', // « Reprendre le jeu » : cache le hub et remet le jeu devant
   runningState: 'game:state', // main → renderer
 
   // SteamGridDB

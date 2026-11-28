@@ -540,6 +540,9 @@ export function isBorderlessFullscreen(hwnd: Hwnd): boolean {
  * ça marche dans la grande majorité des cas.
  */
 export function bringToFront(hwnd: Hwnd): boolean {
+  // Fenêtre réduite (ex. un jeu qui se réduit quand il perd la main) : on la rouvre d'abord,
+  // sinon elle reste réduite dans la barre des tâches même « au premier plan »
+  if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
   if (SetForegroundWindow(hwnd)) return true
   keybd_event(VK_MENU, 0, 0, 0)
   keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
@@ -720,6 +723,9 @@ function sonyKind(vendor: number, product: number): SonyPad['kind'] | null {
   return null
 }
 
+/** Manettes Sony qu'on n'a pas pu ouvrir (pour ne l'écrire qu'une fois dans le journal). */
+const refusedSonyPaths = new Set<string>()
+
 /**
  * Ouvre les manettes PlayStation branchées (sauf celles déjà ouvertes, dont on donne les chemins).
  * Les fermer avec closeSonyPad.
@@ -731,7 +737,12 @@ export function openSonyPads(alreadyOpen: Set<string>): SonyPad[] {
     if (!/054c/i.test(path) || alreadyOpen.has(path)) continue
     const handle = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ_WRITE, null, OPEN_EXISTING, 0, null)
     // INVALID_HANDLE_VALUE vaut -1, soit 0xFFFFFFFFFFFFFFFF en pointeur 64 bits.
-    if (!handle || handle === 0xffffffffffffffffn) continue
+    if (!handle || handle === 0xffffffffffffffffn) {
+      // Souvent : un autre programme (ex. Steam Input) a ouvert la manette pour lui seul
+      if (!refusedSonyPaths.has(path)) console.log(`[manette] Manette Sony vue mais impossible à ouvrir (${path})`)
+      refusedSonyPaths.add(path)
+      continue
+    }
     const attributes: Record<string, unknown> = { Size: koffi.sizeof(HIDD_ATTRIBUTES) }
     const kind = HidD_GetAttributes(handle, attributes)
       ? sonyKind(attributes.VendorID as number, attributes.ProductID as number)

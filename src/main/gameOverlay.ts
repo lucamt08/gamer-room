@@ -51,8 +51,21 @@ function createOverlay(): BrowserWindow {
     if (pendingInfo) window.webContents.send(IPC.overlayOpened, pendingInfo)
     pendingInfo = null
   })
-  // Le menu perd le focus (Alt+Tab, clic ailleurs…) : on le ferme
-  window.on('blur', () => hideOverlay(false))
+  // Le menu perd le focus (Alt+Tab, clic ailleurs…) : on le ferme.
+  // Sauf si c'est Gamer Room qui a pris la main : le hub reste derrière le jeu pendant la partie
+  // (voir gameLauncher.ts), et Windows le réactive quand le jeu se réduit. Le menu reprend alors la main.
+  window.on('blur', () => {
+    setTimeout(() => {
+      if (!isOverlayOpen()) return
+      const focused = BrowserWindow.getFocusedWindow()
+      if (focused && focused !== window) {
+        wm.bringToFront(wm.hwndFromBuffer(window.getNativeWindowHandle()))
+        window.focus()
+      } else if (!focused) {
+        hideOverlay(false)
+      }
+    }, 100)
+  })
   window.on('closed', () => {
     overlay = null
     ready = false

@@ -7,7 +7,7 @@ import { getGameInfo } from './gameInfo'
 import { IPC } from '@shared/ipc'
 import * as library from './library'
 import * as sgdb from './steamgriddb'
-import { launchGame, killRunningGame } from './gameLauncher'
+import { launchGame, killRunningGame, resumeGame } from './gameLauncher'
 import { installGame } from './steamInstalls'
 import { addPcGames, listPcGames } from './pcGames/pcGames'
 import { updateGameSizes } from './gameSizes'
@@ -16,6 +16,7 @@ import { findSteamExe, listSteamGames } from './steamLibrary'
 import { registerKillShortcut } from './shortcuts'
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater'
 import { applyBackgroundMode } from './background'
+import { applyControllerPriority } from './controllerPriority'
 import * as fws from './flawless'
 import { isAlreadyInLibrary } from '@shared/duplicates'
 
@@ -113,6 +114,7 @@ export function registerIpcHandlers(): void {
     library.updateGame(id, { lastPlayedAt: new Date().toISOString() })
   })
   ipcMain.handle(IPC.killGame, () => killRunningGame())
+  ipcMain.handle(IPC.resumeGame, () => resumeGame())
   // Jeu Steam, Epic ou Riot pas installé : ouvre la fenêtre d'installation du magasin
   ipcMain.handle(IPC.installGame, (_event, id: string) => installGame(id))
 
@@ -143,6 +145,8 @@ export function registerIpcHandlers(): void {
     const saved = saveSettings(patch)
     // Option « compter en dehors de l'appli » changée : démarrage avec Windows + icône près de l'horloge
     if (patch.trackOutsideApp !== undefined) applyBackgroundMode()
+    // Bouton Xbox / PS : on (re)donne la priorité à Gamer Room, ou on remet les réglages de Windows / Steam
+    if (patch.guideButton !== undefined || patch.guideButtonPriority !== undefined) applyControllerPriority()
     return saved
   })
 

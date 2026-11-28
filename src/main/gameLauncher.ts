@@ -408,11 +408,27 @@ function keepHubInFront(s: Session, launcher: wm.WindowInfo | null): void {
   bringHubToFront()
 }
 
-/** Cache le hub une fois l'écran de chargement resté affiché assez longtemps. */
+/**
+ * Pendant la partie, le hub n'est PAS caché : il reste juste derrière le jeu. Ainsi, si le jeu se réduit
+ * (menu en jeu, bouton PS) ou se ferme, c'est Gamer Room qu'on voit, jamais le bureau (comme une console).
+ * Windows ne redessine pas une fenêtre entièrement couverte : le hub ne coûte presque rien pendant la partie.
+ * Si la fenêtre du jeu est inconnue, on cache le hub (sinon il pourrait rester devant le jeu).
+ */
+function putHubBehindGame(s: Session): void {
+  const hub = getHub()
+  if (s.gameWindow && wm.windowExists(s.gameWindow)) {
+    hub?.setAlwaysOnTop(false) // (le bouton PS le met « toujours au-dessus » un court instant, voir hub.ts)
+    wm.bringToFront(s.gameWindow)
+  } else {
+    hub?.hide()
+  }
+}
+
+/** Passe le hub derrière le jeu une fois l'écran de chargement resté affiché assez longtemps. */
 function hideHubSoon(s: Session): void {
   const wait = Math.max(0, MIN_LOADING_TIME - (Date.now() - s.startedAt))
   const timer = setTimeout(() => {
-    if (session === s) getHub()?.hide()
+    if (session === s) putHubBehindGame(s)
   }, wait)
   s.timers.push(timer)
 }
@@ -577,17 +593,30 @@ function startProcessWatch(s: Session): void {
   s.timers.push(timer)
 }
 
+/**
+ * « Reprendre le jeu » : le hub a été ouvert pendant la partie (appui court sur le bouton Xbox / PS) ;
+ * on le cache et on remet la fenêtre du jeu au premier plan.
+ */
+export function resumeGame(): void {
+  const s = session
+  if (!s || s.phase !== 'playing') return
+  // Le jeu (rouvert s'il s'était réduit) repasse devant ; le hub reste juste derrière (voir putHubBehindGame)
+  putHubBehindGame(s)
+  // Jeu en plein écran fenêtré forcé : il a pu reprendre sa taille en se réduisant, on le remet
+  if (s.gameWindow && s.game.forceFullscreen && !wm.isBorderlessFullscreen(s.gameWindow)) {
+    wm.makeBorderlessFullscreen(s.gameWindow)
+  }
+}
+
 /** Termine la session : arrête les minuteurs et réaffiche le hub. */
 function endSession(message?: string): void {
   if (session) {
     session.timers.forEach((t) => clearInterval(t))
     session = null
   }
-  const hub = getHub()
-  if (hub) {
-    hub.show()
-    hub.focus()
-  }
+  // Le hub était juste derrière le jeu : on lui redonne la main (astuce de windowManager, Windows
+  // empêchant sinon une appli en arrière-plan de prendre le focus)
+  bringHubToFront()
   notify({ running: false, gameId: null, message })
 }
 

@@ -27,11 +27,15 @@ export function sendToHub(channel: string, payload: unknown): void {
  * `fullscreen` : forcer le plein écran (bouton Guide / PS), sinon on suit le paramètre « Démarrer en plein écran ».
  */
 export function createHub(fullscreen = false): BrowserWindow {
+  const startFullscreen = fullscreen || getSettings().startFullscreen
   const window = new BrowserWindow({
     width: 1400,
     height: 860,
     minWidth: 900,
     minHeight: 600,
+    // Plein écran dès la création : sinon on voit une seconde la fenêtre normale (sa barre en haut)
+    // avant qu'elle passe en plein écran
+    fullscreen: startFullscreen,
     show: false,
     backgroundColor: '#0d0f14',
     autoHideMenuBar: true,
@@ -46,7 +50,7 @@ export function createHub(fullscreen = false): BrowserWindow {
   })
 
   window.once('ready-to-show', () => {
-    if (fullscreen || getSettings().startFullscreen) window.setFullScreen(true)
+    if (startFullscreen && !window.isFullScreen()) window.setFullScreen(true)
     window.show()
     if (fullscreen) wm.bringToFront(wm.hwndFromBuffer(window.getNativeWindowHandle()))
   })
@@ -84,10 +88,6 @@ export function showHub(): void {
 }
 
 /**
- * Bouton Guide / PS de la manette : ouvre le hub en plein écran, devant tout le reste
- * (même si Gamer Room était seulement près de l'horloge).
- */
-/**
  * Remet le hub devant les autres fenêtres, sans changer son mode (plein écran ou non).
  * Sert pendant le lancement d'un jeu : un launcher qui s'ouvre passe derrière Gamer Room (voir gameLauncher.ts).
  */
@@ -101,6 +101,11 @@ export function bringHubToFront(): void {
   window.focus()
 }
 
+/**
+ * Bouton Guide / PS de la manette : ouvre le hub en plein écran, devant tout le reste
+ * (même si Gamer Room était seulement près de l'horloge, ou si un jeu est au premier plan).
+ * Le bureau ne doit jamais se voir : si le jeu se réduit en perdant la main, le hub est déjà là, devant.
+ */
 export function showHubFullscreen(): void {
   const window = getHub()
   if (!window) {
@@ -108,8 +113,28 @@ export function showHubFullscreen(): void {
     return
   }
   if (window.isMinimized()) window.restore()
+  // Hub déjà affiché mais derrière le jeu (voir gameLauncher.ts) : Windows refuse de lui donner la main
+  // (barre des tâches visible, manette qui ne répond plus). En revanche, il active une fenêtre qui
+  // RÉAPPARAÎT : on le cache puis on le réaffiche (invisible pour l'œil, il était derrière le jeu).
+  if (window.isVisible() && !window.isFocused()) window.hide()
+  // Un jeu au premier plan empêche parfois Windows de nous laisser passer devant : le hub passe
+  // « toujours au-dessus » le temps d'apparaître, puis redevient une fenêtre normale
+  window.setAlwaysOnTop(true, 'screen-saver')
+  setTimeout(() => {
+    if (!window.isDestroyed()) window.setAlwaysOnTop(false)
+  }, 800)
+  // Fenêtre pas encore en plein écran : on la rend invisible le temps du passage en plein écran,
+  // pour ne pas voir la fenêtre normale (et sa barre en haut) pendant une fraction de seconde
+  if (!window.isFullScreen()) {
+    window.setOpacity(0)
+    const reveal = (): void => {
+      if (!window.isDestroyed()) window.setOpacity(1)
+    }
+    window.once('enter-full-screen', () => setTimeout(reveal, 50))
+    setTimeout(reveal, 600) // au cas où l'événement n'arrive pas
+    window.setFullScreen(true)
+  }
   window.show()
-  window.setFullScreen(true)
   // Windows empêche une appli en arrière-plan de prendre le focus : on utilise l'astuce de windowManager
   wm.bringToFront(wm.hwndFromBuffer(window.getNativeWindowHandle()))
   window.focus()

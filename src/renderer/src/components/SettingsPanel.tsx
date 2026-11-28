@@ -222,9 +222,18 @@ const SettingsPanel = forwardRef<HTMLDivElement, Props>(function SettingsPanel({
               />
               Bouton Xbox / PS : ouvrir Gamer Room en plein écran, et le maintenir en jeu pour le menu
             </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.guideButtonPriority}
+                disabled={!settings.guideButton}
+                onChange={(e) => update({ guideButtonPriority: e.target.checked })}
+              />
+              Priorité à Gamer Room : ce bouton n'ouvre plus la Xbox Game Bar ni Steam
+            </label>
             <p className="hint">
-              Manette Xbox : pour que Windows n'ouvre pas aussi la Xbox Game Bar, désactive « Ouvrir la Game Bar avec ce
-              bouton sur une manette » dans Paramètres Windows › Jeux › Game Bar.
+              Gamer Room change pour toi les réglages de Windows et de Steam. Game Bar : effet au prochain démarrage du
+              PC. Steam : effet dès que Steam a été fermé une fois. Décoche la case pour tout remettre comme avant.
             </p>
           </>
         )}

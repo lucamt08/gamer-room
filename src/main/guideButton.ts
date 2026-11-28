@@ -27,25 +27,30 @@ export function startGuideButton(handlers: GuideButtonHandlers): void {
 
   let pressedSince = 0 // 0 = bouton relâché
   let longFired = false
+  let source = '' // d'où vient l'appui (pour le journal) : « Xbox » (XInput) ou « PlayStation » (HID)
 
   // Toutes les 50 ms : Xbox (lu tout de suite) + PlayStation (dernier état reçu)
   setInterval(() => {
-    let pressed = false
+    let xbox = false
     try {
-      pressed = wm.isXboxGuidePressed()
+      xbox = wm.isXboxGuidePressed()
     } catch (error) {
       console.warn('[manette] Lecture XInput impossible', error)
     }
-    for (const entry of sonyPads.values()) if (entry.pressed) pressed = true
+    const sony = [...sonyPads.values()].some((entry) => entry.pressed)
+    const pressed = xbox || sony
 
     const now = Date.now()
     if (pressed && pressedSince === 0) {
       pressedSince = now // début de l'appui
       longFired = false
+      source = [xbox && 'Xbox', sony && 'PlayStation'].filter(Boolean).join(' + ')
     } else if (pressed && !longFired && now - pressedSince >= LONG_PRESS) {
       longFired = true
+      console.log(`[manette] Appui long (${source})`)
       handlers.onLongPress()
     } else if (!pressed && pressedSince !== 0) {
+      console.log(`[manette] Bouton relâché après ${now - pressedSince} ms (${source})`)
       if (!longFired) handlers.onShortPress() // relâché avant la durée d'un appui long
       pressedSince = 0
     }

@@ -19,6 +19,7 @@ import { startRiotInstallWatcher } from './pcGames/riotInstalls'
 import { startBattleNetInstallWatcher } from './pcGames/battleNetInstalls'
 import { startGameSizes } from './gameSizes'
 import { startGuideButton } from './guideButton'
+import { applyControllerPriority } from './controllerPriority'
 import { hideOverlay, isOverlayOpen, registerOverlayIpc, toggleOverlay } from './gameOverlay'
 import { getPlayingGame, initGameLauncher, isGameRunning } from './gameLauncher'
 
@@ -72,13 +73,18 @@ app.whenReady().then(() => {
   startGameSizes((game) => sendToHub(IPC.gameUpdated, game))
   applyBackgroundMode()
 
-  // Bouton Guide (Xbox) / PS (PlayStation) de la manette
+  // Bouton Guide (Xbox) / PS (PlayStation) de la manette. Priorité à Gamer Room : la Game Bar et Steam
+  // ne réagissent plus à ce bouton tant que l'appli tourne (voir controllerPriority.ts)
+  applyControllerPriority()
   startGuideButton({
-    // Appui court : hors jeu, on ouvre Gamer Room en plein écran ; menu en jeu ouvert, on le ferme
+    // Appui court : menu en jeu ouvert, on le ferme ; sinon on ouvre Gamer Room en plein écran.
+    // En pleine partie, le hub affiche alors « Reprendre le jeu » à la place de « Jouer » (voir App.tsx).
+    // (Pendant l'écran de chargement, on ne fait rien : le hub est déjà affiché.)
     onShortPress: () => {
       if (!getSettings().guideButton) return
+      console.log(`[manette] Appui court (jeu en cours : ${getPlayingGame() ? 'oui' : 'non'})`)
       if (isOverlayOpen()) hideOverlay()
-      else if (!isGameRunning()) showHubFullscreen()
+      else if (!isGameRunning() || getPlayingGame()) showHubFullscreen()
     },
     // Appui long en jeu : ouvre (ou ferme) le menu sur le côté
     onLongPress: () => {

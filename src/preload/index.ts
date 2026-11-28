@@ -61,6 +61,8 @@ const api = {
   // --- Lancement ---
   launchGame: (id: string): Promise<void> => ipcRenderer.invoke(IPC.launchGame, id),
   killGame: (): Promise<void> => ipcRenderer.invoke(IPC.killGame),
+  /** Jeu en cours : cache Gamer Room et remet le jeu au premier plan. */
+  resumeGame: (): Promise<void> => ipcRenderer.invoke(IPC.resumeGame),
   onRunningState: (cb: (state: RunningState) => void) => listen(IPC.runningState, cb),
 
   // --- SteamGridDB ---

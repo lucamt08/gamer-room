@@ -66,6 +66,7 @@ src/main/        Processus principal (Node). Un fichier = une responsabilité.
   shortcuts.ts     Raccourci global de fermeture forcée
   guideButton.ts   Bouton Xbox / PS de la manette (appui court / long), lu même hub caché
   gameOverlay.ts   Menu en jeu : fenêtre transparente sur le côté, par-dessus le jeu (#overlay)
+  controllerPriority.ts Priorité du bouton Xbox / PS : coupe ce bouton chez la Game Bar (registre) et Steam (localconfig.vdf)
   ipc.ts           Tous les ipcMain.handle
 src/preload/     contextBridge → window.api (fonctions IPC explicites uniquement)
 src/renderer/    Interface React (App.tsx, components/, input/ clavier+manette)
@@ -152,6 +153,14 @@ les applis installées proposent la mise à jour.
   identique (`gameKey`). Wikidata range beaucoup de noms en langue `mul` ; son numéro Steam (P1733) est parfois faux,
   ne pas s'y fier. Wikipédia limite à 10 demandes/min sans contact dans le User-Agent (200 avec) : garder l'adresse
   du projet dans `httpJson.ts`.
+- **Bouton Xbox / PS** : appui court en jeu = hub avec « Reprendre le jeu », appui long = menu sur le côté.
+  Pendant la partie, le hub n'est PAS caché : il reste en plein écran juste derrière le jeu (`putHubBehindGame`),
+  pour qu'on ne voie jamais le bureau si le jeu se réduit ou se ferme. Pour lui redonner la main par-dessus un jeu,
+  il faut le cacher puis le réafficher (`showHubFullscreen`) : Windows refuse sinon (barre des tâches, manette inactive).
+  Windows, Steam et la Game Bar réagissent tous à ce bouton : `controllerPriority.ts` coupe leurs réglages.
+  Game Bar = `UseNexusForGameBarEnabled` (relu seulement à l'ouverture de session). Steam = `Controller_CheckGuideButton`
+  (hors jeu) et `SteamController_Enable_Chord` (overlay en jeu), écrits seulement quand Steam est fermé (il réécrit le fichier).
+  Avec Steam Input, Gamer Room ne voit souvent pas la manette PS directement (HID), seulement la manette Xbox virtuelle de Steam.
 - Les raccourcis `.lnk` vers des URL (`steam://…`) ne sont pas supportés pour l'instant.
 - L'appli n'est pas signée → avertissement SmartScreen à l'installation.
 - **Performances de l'étagère** : ne JAMAIS refaire les boîtes en 3D CSS (`preserve-3d`, `box-reflect`…). Chromium
