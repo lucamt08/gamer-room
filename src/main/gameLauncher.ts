@@ -99,6 +99,31 @@ export function getPlayingGame(): { game: Game; gameWindow: wm.Hwnd | null; star
   return { game: session.game, gameWindow: session.gameWindow, startedAt: session.startedAt }
 }
 
+/** Pid du jeu mis en pause par le menu en jeu (null = rien en pause). */
+let pausedPid: number | null = null
+
+/**
+ * Met le jeu en pause (figé) ou le relance. Sert au menu en jeu : beaucoup de jeux lisent la manette même
+ * quand ils n'ont pas la main, et Windows ne permet pas de les en empêcher. Figé, le jeu ne bouge plus
+ * (comme une console en pause) et la manette ne pilote que le menu.
+ * Jeux Riot (anticheat Vanguard) : jamais figés, par prudence.
+ */
+export function setGamePaused(paused: boolean): void {
+  if (!paused) {
+    if (pausedPid === null) return
+    if (!wm.setProcessPaused(pausedPid, false)) console.warn(`[launcher] Impossible de relancer le jeu (pid ${pausedPid})`)
+    else console.log('[launcher] Jeu relancé')
+    pausedPid = null
+    return
+  }
+  const s = session
+  if (pausedPid !== null || !s?.gameWindow || s.game.source === 'riot') return
+  const pid = wm.getWindowPid(s.gameWindow)
+  if (!pid || !wm.setProcessPaused(pid, true)) return
+  pausedPid = pid
+  console.log(`[launcher] Jeu mis en pause (pid ${pid})`)
+}
+
 /**
  * Découpe une ligne d'arguments en liste, en respectant les guillemets.
  * Exemple : `-w 1920 "C:\Mon dossier\save"` → ['-w', '1920', 'C:\Mon dossier\save']
@@ -376,7 +401,10 @@ function findWindows(s: Session): { game: wm.WindowInfo | null; launcher: wm.Win
     }
   }
 
-  const game = biggestFirst(games)[0] ?? null
+  // Fenêtre du jeu déjà trouvée : on la garde tant qu'elle est là. Sinon, une fenêtre technique de même
+  // taille (ex. « D3DProxyWindow » de Densha Attack) pouvait la remplacer : « Reprendre » mettait alors
+  // devant une fenêtre invisible, et le jeu ne recevait plus la manette.
+  const game = games.find((w) => w.hwnd === s.gameWindow) ?? biggestFirst(games)[0] ?? null
   // Fenêtre de launcher : une fenêtre du processus lancé (ou de ses enfants) qui n'est pas le jeu,
   // ou le launcher de l'éditeur d'un jeu Steam
   const launchers = windows.filter(
@@ -600,6 +628,7 @@ function startProcessWatch(s: Session): void {
 export function resumeGame(): void {
   const s = session
   if (!s || s.phase !== 'playing') return
+  setGamePaused(false) // le jeu avait été figé pendant que le carrousel était par-dessus
   // Le jeu (rouvert s'il s'était réduit) repasse devant ; le hub reste juste derrière (voir putHubBehindGame)
   putHubBehindGame(s)
   // Jeu en plein écran fenêtré forcé : il a pu reprendre sa taille en se réduisant, on le remet
@@ -610,6 +639,7 @@ export function resumeGame(): void {
 
 /** Termine la session : arrête les minuteurs et réaffiche le hub. */
 function endSession(message?: string): void {
+  setGamePaused(false) // (sécurité : un jeu ne doit jamais rester figé)
   if (session) {
     session.timers.forEach((t) => clearInterval(t))
     session = null
@@ -633,6 +663,7 @@ function endSession(message?: string): void {
  *  - on ne ferme jamais les programmes vitaux de Windows ni Steam (wm.isProtectedProcess).
  */
 export function killRunningGame(): void {
+  setGamePaused(false) // un jeu figé par le menu en jeu est relancé avant d'être fermé
   // Annulé pendant la préparation de Flawless Widescreen : le jeu ne sera pas lancé
   if (preparing) {
     preparing.cancelled = true

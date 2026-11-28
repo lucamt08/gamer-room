@@ -31,8 +31,10 @@ function formatDuration(ms: number): string {
 export default function GameOverlay() {
   const [info, setInfo] = useState<OverlayInfo | null>(null)
   const [selected, setSelected] = useState(0)
-  /** « Quitter le jeu » a été choisi une fois : on attend la confirmation. */
+  /** « Quitter le jeu » a été choisi : on affiche la question « Es-tu sûr ? » (Oui / Non). */
   const [confirmQuit, setConfirmQuit] = useState(false)
+  /** Réponse choisie dans la question : 0 = Oui, 1 = Non (Non par défaut, pour éviter les accidents). */
+  const [answer, setAnswer] = useState(1)
   const [now, setNow] = useState(Date.now())
 
   // Le main nous prévient à chaque ouverture : on repart du haut du menu
@@ -54,14 +56,39 @@ export default function GameOverlay() {
   }, [])
 
   const choose = (item: MenuItem): void => {
-    if (item.action === 'quit' && !confirmQuit) {
-      setConfirmQuit(true) // il faut valider une 2e fois pour quitter (évite les accidents)
+    if (item.action === 'quit') {
+      setAnswer(1) // « Non » choisi d'avance
+      setConfirmQuit(true) // on demande confirmation avant de quitter
       return
     }
     window.api.overlayAction(item.action)
   }
 
+  /** Réponse à « Es-tu sûr de vouloir quitter ? ». Oui = le jeu est fermé comme avec sa croix. */
+  const answerQuit = (yes: boolean): void => {
+    setConfirmQuit(false)
+    if (yes) window.api.overlayAction('quit')
+  }
+
   const onAction = (action: NavAction): void => {
+    // Question « Es-tu sûr ? » affichée : gauche/droite (ou haut/bas) pour choisir Oui ou Non
+    if (confirmQuit) {
+      switch (action) {
+        case 'left':
+        case 'right':
+        case 'up':
+        case 'down':
+          setAnswer((a) => 1 - a)
+          break
+        case 'confirm':
+          answerQuit(answer === 0)
+          break
+        case 'back':
+          answerQuit(false)
+          break
+      }
+      return
+    }
     switch (action) {
       case 'up':
         setSelected((i) => (i - 1 + ITEMS.length) % ITEMS.length)
@@ -90,7 +117,11 @@ export default function GameOverlay() {
   const clock = new Date(now).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="game-overlay">
+    // En fond : la dernière image du jeu (capturée juste avant l'ouverture), au cas où le jeu devient noir
+    <div
+      className="game-overlay"
+      style={info?.background ? { backgroundImage: `url("${info.background}")` } : undefined}
+    >
       {/* Partie gauche : le jeu reste visible, assombri. Un clic dessus ferme le menu. */}
       <div className="game-overlay-backdrop" onClick={() => window.api.overlayAction('resume')} />
 
@@ -107,19 +138,47 @@ export default function GameOverlay() {
           </div>
         </div>
 
-        <nav className="game-overlay-menu">
-          {ITEMS.map((item, index) => (
-            <button
-              key={item.action}
-              className={`game-overlay-item${index === selected ? ' selected' : ''}${item.danger ? ' danger' : ''}`}
-              onMouseEnter={() => setSelected(index)}
-              onClick={() => choose(item)}
-            >
-              <span className="game-overlay-icon">{item.icon}</span>
-              {item.action === 'quit' && confirmQuit ? 'Valide encore pour quitter' : item.label}
-            </button>
-          ))}
-        </nav>
+        {confirmQuit ? (
+          // Confirmation : quitter depuis ici ferme la fenêtre du jeu (comme sa croix). Le jeu peut alors
+          // ne pas sauvegarder : mieux vaut passer par son propre menu « Quitter ».
+          <div className="game-overlay-confirm">
+            <p>
+              Il est conseillé de quitter le jeu <strong>depuis le jeu lui-même</strong> (pour être sûr que ta
+              partie est sauvegardée).
+            </p>
+            <p>Es-tu sûr de vouloir quitter {game?.name ?? 'le jeu'} ?</p>
+            <div className="game-overlay-confirm-buttons">
+              <button
+                className={`game-overlay-item danger${answer === 0 ? ' selected' : ''}`}
+                onMouseEnter={() => setAnswer(0)}
+                onClick={() => answerQuit(true)}
+              >
+                Oui
+              </button>
+              <button
+                className={`game-overlay-item${answer === 1 ? ' selected' : ''}`}
+                onMouseEnter={() => setAnswer(1)}
+                onClick={() => answerQuit(false)}
+              >
+                Non
+              </button>
+            </div>
+          </div>
+        ) : (
+          <nav className="game-overlay-menu">
+            {ITEMS.map((item, index) => (
+              <button
+                key={item.action}
+                className={`game-overlay-item${index === selected ? ' selected' : ''}${item.danger ? ' danger' : ''}`}
+                onMouseEnter={() => setSelected(index)}
+                onClick={() => choose(item)}
+              >
+                <span className="game-overlay-icon">{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        )}
 
         <div className="game-overlay-help">
           <kbd>A</kbd> valider · <kbd>B</kbd> fermer · maintiens <kbd>Xbox</kbd>/<kbd>PS</kbd> pour fermer

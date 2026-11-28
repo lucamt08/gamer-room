@@ -161,6 +161,9 @@ les applis installées proposent la mise à jour.
   Game Bar = `UseNexusForGameBarEnabled` (relu seulement à l'ouverture de session). Steam = `Controller_CheckGuideButton`
   (hors jeu) et `SteamController_Enable_Chord` (overlay en jeu), écrits seulement quand Steam est fermé (il réécrit le fichier).
   Avec Steam Input, Gamer Room ne voit souvent pas la manette PS directement (HID), seulement la manette Xbox virtuelle de Steam.
+  Dans l'interface, une manette peut apparaître deux fois (lue directement en disposition non standard + manette virtuelle
+  de Steam) : `useGamepad.ts` n'écoute que les manettes « standard » s'il y en a. Menu en jeu ouvert = jeu figé
+  (`setGamePaused`, jamais pour Riot), fond = capture de l'écran prise juste avant ; « Quitter » envoie WM_CLOSE.
 - Les raccourcis `.lnk` vers des URL (`steam://…`) ne sont pas supportés pour l'instant.
 - L'appli n'est pas signée → avertissement SmartScreen à l'installation.
 - **Performances de l'étagère** : ne JAMAIS refaire les boîtes en 3D CSS (`preserve-3d`, `box-reflect`…). Chromium

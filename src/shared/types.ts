@@ -194,6 +194,11 @@ export interface OverlayInfo {
   game: Game
   /** Moment où le jeu a été lancé (millisecondes, comme Date.now()). */
   startedAt: number
+  /**
+   * Capture de l'écran du jeu prise juste avant d'ouvrir le menu (image JPEG en data URL), affichée en fond :
+   * certains jeux deviennent noirs ou se réduisent quand ils perdent la main. Absente si la capture a échoué.
+   */
+  background?: string
 }
 
 /** Les choix du menu en jeu. */
