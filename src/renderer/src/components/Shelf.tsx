@@ -67,6 +67,22 @@ const Shelf = forwardRef<HTMLDivElement, Props>(function Shelf({ games, selected
     }
   }, [empty])
 
+  // Hub au premier plan ? Sinon (derrière un jeu pendant la partie, autre fenêtre devant), la scène arrête
+  // de se dessiner : elle ne prend plus rien à la carte graphique (voir ShelfScene.setActive)
+  useEffect(() => {
+    if (empty) return
+    const update = (): void => scene.current?.setActive(document.visibilityState === 'visible' && document.hasFocus())
+    update()
+    document.addEventListener('visibilitychange', update)
+    window.addEventListener('focus', update)
+    window.addEventListener('blur', update)
+    return () => {
+      document.removeEventListener('visibilitychange', update)
+      window.removeEventListener('focus', update)
+      window.removeEventListener('blur', update)
+    }
+  }, [empty])
+
   // Sélection puis jeux transmis à la scène (après sa création ci-dessus, grâce à l'ordre des effets)
   useEffect(() => {
     // La sélection a changé autrement (clavier, manette…) : on arrête une éventuelle glissade.

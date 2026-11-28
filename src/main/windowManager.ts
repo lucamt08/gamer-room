@@ -101,6 +101,7 @@ const SetForegroundWindow = user32.func('bool __stdcall SetForegroundWindow(void
 const GetForegroundWindow = user32.func('void * __stdcall GetForegroundWindow()')
 const BringWindowToTop = user32.func('bool __stdcall BringWindowToTop(void *hwnd)')
 const keybd_event = user32.func('void __stdcall keybd_event(uint8 vk, uint8 scan, uint32 flags, uintptr_t extra)')
+const PostMessageW = user32.func('bool __stdcall PostMessageW(void *hwnd, uint32 msg, uintptr_t wParam, intptr_t lParam)')
 
 // --- Processus (kernel32.dll) ---
 const CreateToolhelp32Snapshot = kernel32.func('void * __stdcall CreateToolhelp32Snapshot(uint32 flags, uint32 pid)')
@@ -111,6 +112,11 @@ const OpenProcess = kernel32.func('void * __stdcall OpenProcess(uint32 access, b
 const GetProcessTimes = kernel32.func(
   'bool __stdcall GetProcessTimes(void *process, _Out_ uint64 *creation, _Out_ uint64 *exit, _Out_ uint64 *kernel, _Out_ uint64 *user)'
 )
+// Pause / reprise d'un processus entier (ntdll.dll : fonctions internes de Windows, utilisées par
+// le Gestionnaire des tâches et Process Explorer). 0 = réussi.
+const ntdll = koffi.load('ntdll.dll')
+const NtSuspendProcess = ntdll.func('int32 __stdcall NtSuspendProcess(void *process)')
+const NtResumeProcess = ntdll.func('int32 __stdcall NtResumeProcess(void *process)')
 const QueryFullProcessImageNameW = kernel32.func(
   'bool __stdcall QueryFullProcessImageNameW(void *process, uint32 flags, _Out_ uint8_t *buf, _Inout_ uint32 *size)'
 )
@@ -147,6 +153,8 @@ const SW_RESTORE = 9
 const TH32CS_SNAPPROCESS = 0x2
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000 // droit minimal pour lire le chemin d'un processus
 const VK_MENU = 0x12 // touche Alt
+const WM_CLOSE = 0x0010 // message « ferme-toi » (envoyé par la croix ou Alt+F4)
+const PROCESS_SUSPEND_RESUME = 0x0800 // droit de mettre en pause / relancer un processus
 const KEYEVENTF_KEYUP = 0x2
 
 // ----------------------------------------------------------------------------
@@ -540,11 +548,39 @@ export function isBorderlessFullscreen(hwnd: Hwnd): boolean {
  * ça marche dans la grande majorité des cas.
  */
 export function bringToFront(hwnd: Hwnd): boolean {
+  // Fenêtre réduite (ex. un jeu qui se réduit quand il perd la main) : on la rouvre d'abord,
+  // sinon elle reste réduite dans la barre des tâches même « au premier plan »
+  if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
   if (SetForegroundWindow(hwnd)) return true
   keybd_event(VK_MENU, 0, 0, 0)
   keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
   BringWindowToTop(hwnd)
   return Boolean(SetForegroundWindow(hwnd))
+}
+
+/**
+ * Demande à une fenêtre de se fermer, comme un clic sur sa croix (ou Alt+F4) : le programme reçoit
+ * WM_CLOSE et se ferme proprement (sauvegarde, éventuelle question « Quitter ? »).
+ * Contrairement à « forcer la fermeture », rien n'est tué : le jeu peut refuser ou demander confirmation.
+ * (On n'envoie pas « Fermer » du menu système : le plein écran sans bordure retire ce menu, et le jeu l'ignore.)
+ */
+export function requestCloseWindow(hwnd: Hwnd): boolean {
+  return Boolean(PostMessageW(hwnd, WM_CLOSE, 0, 0))
+}
+
+/**
+ * Met un processus en pause (tous ses fils d'exécution sont figés) ou le relance.
+ * Sert au menu en jeu : le jeu figé ne lit plus la manette, comme une console en pause.
+ * ⚠️ Un processus mis en pause DOIT être relancé (sinon il reste figé jusqu'à ce qu'on le tue).
+ */
+export function setProcessPaused(pid: number, paused: boolean): boolean {
+  const handle = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid)
+  if (!handle) return false
+  try {
+    return (paused ? NtSuspendProcess(handle) : NtResumeProcess(handle)) === 0
+  } finally {
+    CloseHandle(handle)
+  }
 }
 
 /**
@@ -720,6 +756,9 @@ function sonyKind(vendor: number, product: number): SonyPad['kind'] | null {
   return null
 }
 
+/** Manettes Sony qu'on n'a pas pu ouvrir (pour ne l'écrire qu'une fois dans le journal). */
+const refusedSonyPaths = new Set<string>()
+
 /**
  * Ouvre les manettes PlayStation branchées (sauf celles déjà ouvertes, dont on donne les chemins).
  * Les fermer avec closeSonyPad.
@@ -731,7 +770,12 @@ export function openSonyPads(alreadyOpen: Set<string>): SonyPad[] {
     if (!/054c/i.test(path) || alreadyOpen.has(path)) continue
     const handle = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ_WRITE, null, OPEN_EXISTING, 0, null)
     // INVALID_HANDLE_VALUE vaut -1, soit 0xFFFFFFFFFFFFFFFF en pointeur 64 bits.
-    if (!handle || handle === 0xffffffffffffffffn) continue
+    if (!handle || handle === 0xffffffffffffffffn) {
+      // Souvent : un autre programme (ex. Steam Input) a ouvert la manette pour lui seul
+      if (!refusedSonyPaths.has(path)) console.log(`[manette] Manette Sony vue mais impossible à ouvrir (${path})`)
+      refusedSonyPaths.add(path)
+      continue
+    }
     const attributes: Record<string, unknown> = { Size: koffi.sizeof(HIDD_ATTRIBUTES) }
     const kind = HidD_GetAttributes(handle, attributes)
       ? sonyKind(attributes.VendorID as number, attributes.ProductID as number)

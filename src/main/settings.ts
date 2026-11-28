@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fwsPath: '', // dossier de Flawless Widescreen : '' = recherche automatique
   gameFolders: [], // dossiers de jeux choisis à la main (en plus des dossiers habituels comme D:\Games)
   guideButton: true, // bouton Guide / PS : ouvrir Gamer Room, appui long en jeu = menu sur le côté
+  guideButtonPriority: true, // ce bouton n'ouvre plus la Xbox Game Bar ni Steam tant que Gamer Room tourne
   ...DEFAULT_SCROLL_SETTINGS // molette, glisser, manette (voir shared/scroll.ts)
 }
 

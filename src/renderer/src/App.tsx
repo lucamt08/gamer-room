@@ -140,9 +140,22 @@ export default function App() {
   }, [shelfGames, otherCopies, selectId])
 
   // --- Actions principales ---
+  /** Ce jeu est-il celui en cours de partie ? (ou un autre exemplaire du même jeu, voir duplicates.ts) */
+  const isPlaying = (game: Game | undefined): boolean =>
+    !!game &&
+    running.running &&
+    running.phase === 'playing' &&
+    (game.id === running.gameId || !!otherCopies.get(game.id)?.some((c) => c.id === running.gameId))
+
   const launch = useCallback(
     async (game: Game | undefined) => {
-      if (!game || running.running) return
+      if (!game) return
+      // Hub ouvert en pleine partie (bouton Xbox / PS) : « Reprendre le jeu »
+      if (isPlaying(game)) {
+        window.api.resumeGame()
+        return
+      }
+      if (running.running) return
       try {
         // Jeu Steam, Epic ou Riot pas installé : « Jouer » devient « Installer » (le magasin ouvre sa fenêtre d'installation)
         if (game.installed === false) {
@@ -155,7 +168,8 @@ export default function App() {
         showToast(cleanError(e), true)
       }
     },
-    [running.running]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [running, otherCopies]
   )
 
   /** Ajoute des jeux à partir de chemins de fichiers, puis cherche leurs jaquettes. */
@@ -336,6 +350,8 @@ export default function App() {
         if (selectedGame) runFooterButton('infos')
         break
       case 'back':
+        // Hub ouvert en pleine partie : B ramène au jeu
+        if (playingNow) window.api.resumeGame()
         break
     }
   }
@@ -345,7 +361,37 @@ export default function App() {
     if (!selectedGame) setDetailsOpen(false)
   }, [selectedGame])
 
-  const inputEnabled = !running.running
+  // Le hub est-il au premier plan ? Pendant une partie, il reste juste derrière le jeu (voir gameLauncher.ts) :
+  // la manette ne doit pas le piloter en douce pendant qu'on joue
+  const isActive = (): boolean => document.visibilityState === 'visible' && document.hasFocus()
+  const [hubVisible, setHubVisible] = useState(isActive)
+  useEffect(() => {
+    const onChange = (): void => setHubVisible(isActive())
+    document.addEventListener('visibilitychange', onChange)
+    window.addEventListener('focus', onChange)
+    window.addEventListener('blur', onChange)
+    return () => {
+      document.removeEventListener('visibilitychange', onChange)
+      window.removeEventListener('focus', onChange)
+      window.removeEventListener('blur', onChange)
+    }
+  }, [])
+
+  // Hub rouvert pendant la partie (bouton Xbox / PS) : on se place sur le jeu en cours, sur « Reprendre le jeu »
+  const playingNow = running.running && running.phase === 'playing'
+  useEffect(() => {
+    if (!playingNow || !hubVisible) return
+    const index = shelfGames.findIndex(
+      (g) => g.id === running.gameId || otherCopies.get(g.id)?.some((c) => c.id === running.gameId)
+    )
+    if (index >= 0) setSelected(index)
+    setDetailsOpen(false)
+    setFooterFocus(FOOTER_BUTTONS.indexOf('play'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playingNow, hubVisible])
+
+  // Pendant le chargement : pas de navigation. En pleine partie : seulement quand le hub est à l'écran.
+  const inputEnabled = !running.running || (playingNow && hubVisible)
   useKeyboard(onAction, inputEnabled)
   useGamepad(onAction, inputEnabled, { speed: scroll.gamepadSpeed, acceleration: scroll.gamepadAcceleration })
 
@@ -492,12 +538,12 @@ export default function App() {
             <button
               className={`play-btn${footerFocus === 0 ? ' pad-focus' : ''}`}
               onClick={() => runFooterButton('play')}
-              disabled={running.running}
+              disabled={running.running && !isPlaying(selectedGame)}
             >
               <span className="play-btn-icon" aria-hidden="true">
-                {selectedGame.installed === false ? '⬇' : '▶'}
+                {selectedGame.installed === false && !isPlaying(selectedGame) ? '⬇' : '▶'}
               </span>
-              {selectedGame.installed === false ? 'Installer' : 'Jouer'}
+              {isPlaying(selectedGame) ? 'Reprendre le jeu' : selectedGame.installed === false ? 'Installer' : 'Jouer'}
             </button>
             <button className={`btn${footerFocus === 1 ? ' pad-focus' : ''}`} onClick={() => runFooterButton('infos')}>
               ⓘ Infos
@@ -509,6 +555,15 @@ export default function App() {
               Jaquette
             </button>
           </div>
+          {/* En pleine partie : rappel du jeu en cours, et fermeture forcée à la souris */}
+          {playingNow && (
+            <div className="details-help">
+              Jeu en cours · <kbd>A</kbd> reprendre · <kbd>B</kbd> retour au jeu ·{' '}
+              <button className="btn btn-ghost btn-danger" onClick={() => window.api.killGame()}>
+                Forcer la fermeture
+              </button>
+            </div>
+          )}
           <div className="details-help">
             <kbd>Entrée</kbd>/<kbd>A</kbd> jouer · <kbd>↓</kbd> boutons (Infos…) · <kbd>I</kbd>/<kbd>RB</kbd> infos ·{' '}
             <kbd>E</kbd>/<kbd>Y</kbd> modifier · <kbd>C</kbd>/<kbd>X</kbd> jaquette · <kbd>P</kbd>/<kbd>Start</kbd>{' '}
@@ -541,14 +596,6 @@ export default function App() {
         />
       )}
 
-      {running.running && running.phase === 'playing' && (
-        <div className="running-overlay">
-          <p>Jeu en cours…</p>
-          <button className="btn btn-danger" onClick={() => window.api.killGame()}>
-            Forcer la fermeture
-          </button>
-        </div>
-      )}
 
       {dragging && <div className="drop-overlay">Dépose ton .exe ou raccourci ici</div>}
 

@@ -10,7 +10,7 @@ import { getSettings } from './settings'
 import { registerKillShortcut } from './shortcuts'
 import { initUpdater } from './updater'
 import { fixLauncherNamesAtStartup } from './launchLearning'
-import { createHub, sendToHub, showHub, showHubFullscreen } from './hub'
+import { createHub, getHub, sendToHub, showHub, showHubFullscreen } from './hub'
 import { applyBackgroundMode, isBackgroundMode, startedHidden } from './background'
 import { savePlaytimeNow, startPlaytimeTracker } from './playtimeTracker'
 import { startSteamInstallWatcher } from './steamInstalls'
@@ -19,8 +19,9 @@ import { startRiotInstallWatcher } from './pcGames/riotInstalls'
 import { startBattleNetInstallWatcher } from './pcGames/battleNetInstalls'
 import { startGameSizes } from './gameSizes'
 import { startGuideButton } from './guideButton'
+import { applyControllerPriority } from './controllerPriority'
 import { hideOverlay, isOverlayOpen, registerOverlayIpc, toggleOverlay } from './gameOverlay'
-import { getPlayingGame, initGameLauncher, isGameRunning } from './gameLauncher'
+import { getPlayingGame, initGameLauncher, isGameRunning, setGamePaused } from './gameLauncher'
 
 // Une seule instance du hub à la fois : si on le relance, on remet l'existant au premier plan.
 if (!app.requestSingleInstanceLock()) {
@@ -72,13 +73,29 @@ app.whenReady().then(() => {
   startGameSizes((game) => sendToHub(IPC.gameUpdated, game))
   applyBackgroundMode()
 
-  // Bouton Guide (Xbox) / PS (PlayStation) de la manette
+  // Bouton Guide (Xbox) / PS (PlayStation) de la manette. Priorité à Gamer Room : la Game Bar et Steam
+  // ne réagissent plus à ce bouton tant que l'appli tourne (voir controllerPriority.ts)
+  applyControllerPriority()
   startGuideButton({
-    // Appui court : hors jeu, on ouvre Gamer Room en plein écran ; menu en jeu ouvert, on le ferme
+    // Appui court : menu en jeu ouvert, on le ferme ; sinon on ouvre Gamer Room en plein écran.
+    // En pleine partie, le hub affiche alors « Reprendre le jeu » à la place de « Jouer » (voir App.tsx).
+    // (Pendant l'écran de chargement, on ne fait rien : le hub est déjà affiché.)
     onShortPress: () => {
       if (!getSettings().guideButton) return
-      if (isOverlayOpen()) hideOverlay()
-      else if (!isGameRunning()) showHubFullscreen()
+      console.log(`[manette] Appui court (jeu en cours : ${getPlayingGame() ? 'oui' : 'non'})`)
+      if (isOverlayOpen()) {
+        hideOverlay()
+      } else if (getPlayingGame()) {
+        showHubFullscreen()
+        // Le jeu est figé tant que le carrousel est par-dessus : sinon certains jeux (ex. Densha Attack)
+        // reçoivent aussi les boutons de la manette (un A pour « Reprendre » choisissait « Quitter » dans le jeu).
+        // Il repart avec « Reprendre le jeu » (voir resumeGame).
+        setTimeout(() => {
+          if (getPlayingGame() && getHub()?.isFocused()) setGamePaused(true)
+        }, 300)
+      } else if (!isGameRunning()) {
+        showHubFullscreen()
+      }
     },
     // Appui long en jeu : ouvre (ou ferme) le menu sur le côté
     onLongPress: () => {
@@ -100,4 +117,8 @@ app.on('window-all-closed', () => {
 
 // Avant de quitter : on enregistre le temps de jeu compté depuis la dernière minute
 app.on('before-quit', () => savePlaytimeNow())
+// Un jeu figé par le menu en jeu ne doit jamais le rester : on le relance si Gamer Room se ferme
+// (même sur une erreur : l'événement « exit » de Node arrive en dernier)
+app.on('will-quit', () => setGamePaused(false))
+process.on('exit', () => setGamePaused(false))
 app.on('will-quit', () => globalShortcut.unregisterAll())

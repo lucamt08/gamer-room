@@ -182,6 +182,11 @@ export interface Settings {
    * un appui long en jeu ouvre le menu sur le côté (voir guideButton.ts et gameOverlay.ts).
    */
   guideButton: boolean
+  /**
+   * Priorité à Gamer Room sur ce bouton : tant que Gamer Room tourne, la Xbox Game Bar et Steam ne réagissent
+   * plus au bouton (leurs réglages sont remis à la fermeture). Voir controllerPriority.ts.
+   */
+  guideButtonPriority: boolean
 }
 
 /** Ce que le menu en jeu affiche (envoyé par le main à chaque ouverture du menu). */
@@ -189,6 +194,11 @@ export interface OverlayInfo {
   game: Game
   /** Moment où le jeu a été lancé (millisecondes, comme Date.now()). */
   startedAt: number
+  /**
+   * Capture de l'écran du jeu prise juste avant d'ouvrir le menu (image JPEG en data URL), affichée en fond :
+   * certains jeux deviennent noirs ou se réduisent quand ils perdent la main. Absente si la capture a échoué.
+   */
+  background?: string
 }
 
 /** Les choix du menu en jeu. */

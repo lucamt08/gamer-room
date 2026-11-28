@@ -52,6 +52,8 @@ const PERSPECTIVE = 1300
 const FOCUS_SCALE = 1.32
 /** Au-delà de cette distance du centre, les boîtes ne sont pas dessinées. */
 const MAX_VISIBLE_DISTANCE = 16
+/** Au repos, une image toutes les 33 ms (30 images/s) : assez pour le flottement et l'éclat, lents. */
+const IDLE_FRAME_MS = 1000 / 30
 /** Inclinaison maximale (en degrés) quand la souris est au bord de la boîte du centre. */
 const MAX_TILT_LEFT_RIGHT = 24
 const MAX_TILT_UP_DOWN = 14
@@ -249,11 +251,72 @@ export class ShelfScene {
     this.fade.frustumCulled = false
     this.fadeScene.add(this.fade)
 
-    const loop = (): void => {
-      this.frame = requestAnimationFrame(loop)
-      this.render(performance.now())
+    this.ensureLoop()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boucle de dessin (économe)
+  // ---------------------------------------------------------------------------
+  //
+  // Avant, l'étagère était redessinée à chaque rafraîchissement de l'écran (175 fois par seconde sur un
+  // écran 174 Hz), même quand rien ne bougeait : ~25 % d'un cœur + la carte graphique, au repos.
+  // Maintenant :
+  //  - quelque chose bouge (défilement, souris, sélection, apparition…) : à chaque image, comme avant ;
+  //  - au repos, seuls le flottement et l'éclat de la boîte du centre bougent, lentement : 30 images/s ;
+  //  - hub pas au premier plan (derrière un jeu, autre fenêtre devant) : plus rien, dès que tout est arrêté.
+
+  /** La boucle tourne-t-elle (une image est-elle demandée) ? */
+  private running = false
+  /** Le hub est-il au premier plan ? (voir setActive) */
+  private active = true
+  /** Jusqu'à quand dessiner chaque image après une action (ms, comme performance.now()). */
+  private wakeUntil = 0
+  private lastRender = 0
+  /** Où le ressort doit arriver (calculé dans stepSpring). */
+  private goal = 0
+
+  private ensureLoop(): void {
+    if (this.running) return
+    this.running = true
+    this.frame = requestAnimationFrame(this.loop)
+  }
+
+  /** Une action vient d'avoir lieu : on dessine chaque image pendant un moment (les animations durent < 1,5 s). */
+  private wake(ms = 1500): void {
+    this.wakeUntil = Math.max(this.wakeUntil, performance.now() + ms)
+    this.ensureLoop()
+  }
+
+  /** Quelque chose bouge-t-il, qui demande d'être dessiné à chaque image ? */
+  private isBusy(now: number): boolean {
+    return (
+      now < this.wakeUntil ||
+      this.dragging ||
+      this.velocity !== 0 ||
+      this.position !== this.goal ||
+      this.glide !== this.goal
+    )
+  }
+
+  private loop = (now: number): void => {
+    const busy = this.isBusy(now)
+    if (busy || now - this.lastRender >= IDLE_FRAME_MS) {
+      this.lastRender = now
+      this.render(now)
     }
-    this.frame = requestAnimationFrame(loop)
+    // Hub pas au premier plan et plus rien ne bouge : la boucle s'arrête (elle repart à la prochaine action)
+    if (this.active || busy) this.frame = requestAnimationFrame(this.loop)
+    else this.running = false
+  }
+
+  /**
+   * Le hub est-il au premier plan ? Sinon (derrière un jeu, autre fenêtre devant), on arrête de dessiner :
+   * l'étagère ne prend plus rien à la carte graphique pendant qu'on joue.
+   */
+  setActive(active: boolean): void {
+    if (active === this.active) return
+    this.active = active
+    if (active) this.wake(300)
   }
 
   // ---------------------------------------------------------------------------
@@ -262,6 +325,7 @@ export class ShelfScene {
 
   /** Taille du canvas (px), hauteur de la zone des boîtes et largeur d'une boîte (comme `--box-width`). */
   setSize(width: number, height: number, stageHeight: number, boxWidth: number): void {
+    this.wake()
     const boxChanged = boxWidth !== this.boxW
     this.width = Math.max(1, width)
     this.height = Math.max(1, height)
@@ -344,6 +408,7 @@ export class ShelfScene {
   // ---------------------------------------------------------------------------
 
   setGames(games: Game[]): void {
+    this.wake(2000) // (apparition des boîtes au lancement : jusqu'à 0,9 s + 45 ms par place)
     const now = performance.now()
     const old = new Map(this.items.map((item) => [item.game.id, item]))
     const next: Item[] = []
@@ -380,6 +445,7 @@ export class ShelfScene {
   }
 
   setSelected(index: number): void {
+    this.wake()
     if (index === this.selected) return
     const now = performance.now()
     // Rythme des crans : nombre de jeux passés depuis le cran précédent, divisé par le temps écoulé
@@ -402,6 +468,7 @@ export class ShelfScene {
    * L'étagère suit le curseur au lieu d'avancer seulement à chaque cran. 0 et `false` à la fin du glisser.
    */
   setDrag(offset: number, dragging: boolean): void {
+    this.wake()
     this.dragOffset = dragging ? offset : 0
     this.dragging = dragging
   }
@@ -459,6 +526,7 @@ export class ShelfScene {
 
   /** La souris bouge sur l'étagère : survol des boîtes de côté, inclinaison de celle du centre. */
   pointerMove(clientX: number, clientY: number, dragging: boolean): number {
+    this.wake()
     const now = performance.now()
     this.hoverEnabled = !dragging
     const hit = dragging ? -1 : this.hitTest(clientX, clientY)
@@ -481,6 +549,7 @@ export class ShelfScene {
   }
 
   pointerLeave(): void {
+    this.wake()
     const now = performance.now()
     this.setHovered(-1, now)
     this.stopTilt(now)
@@ -489,6 +558,7 @@ export class ShelfScene {
 
   /** Bouton de la souris enfoncé / relâché sur la boîte du centre (elle s'enfonce un peu). */
   setPressed(down: boolean, clientX = 0, clientY = 0): void {
+    this.wake()
     const now = performance.now()
     this.pressed.set(down && this.hitTest(clientX, clientY) === this.selected ? 0.97 : 1, now)
   }
@@ -686,6 +756,7 @@ export class ShelfScene {
     // (au bout de l'étagère, le glisser ne dépasse que d'un tiers de jeu)
     const last = Math.max(0, this.items.length - 1)
     const goal = Math.max(-0.33, Math.min(last + 0.33, this.selected + this.dragOffset))
+    this.goal = goal
     if (now - this.lastStepAt > STEP_PAUSE_MS) this.stepRate = 0 // les crans se sont arrêtés
 
     // 1. Le guide avance en ligne droite vers le jeu sélectionné (pendant un glisser : il colle au curseur)
@@ -824,6 +895,8 @@ export class ShelfScene {
 
   dispose(): void {
     cancelAnimationFrame(this.frame)
+    this.running = false
+    this.active = false
     for (const item of this.items) this.disposeItem(item)
     this.items = []
     this.boxGeometry.dispose()

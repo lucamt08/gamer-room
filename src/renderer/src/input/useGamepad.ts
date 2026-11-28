@@ -61,6 +61,19 @@ function stickDirection(pad: Gamepad): NavAction | null {
   return y > 0 ? 'down' : 'up'
 }
 
+/**
+ * Les manettes à écouter. Une même manette peut apparaître DEUX fois : par exemple une manette PlayStation
+ * lue directement (disposition « non standard » : ses numéros de boutons ne sont pas ceux d'une Xbox,
+ * la croix y est le bouton 1 = « retour ») ET la manette Xbox virtuelle que Steam Input crée pour elle.
+ * Chaque appui arrivait alors deux fois, avec deux sens différents (la croix validait ET fermait le menu).
+ * Règle : si au moins une manette est en disposition standard, on n'écoute que celles-là.
+ */
+function usablePads(): Gamepad[] {
+  const pads = navigator.getGamepads().filter((pad): pad is Gamepad => pad !== null)
+  const standard = pads.filter((pad) => pad.mapping === 'standard')
+  return standard.length > 0 ? standard : pads
+}
+
 export function useGamepad(
   onAction: (action: NavAction) => void,
   enabled: boolean,
@@ -90,8 +103,7 @@ export function useGamepad(
       }
 
       const pressed = new Set<NavAction>()
-      for (const pad of navigator.getGamepads()) {
-        if (!pad) continue
+      for (const pad of usablePads()) {
         pad.buttons.forEach((button, index) => {
           const action = BUTTONS[index]
           if (action && button.pressed) pressed.add(action)

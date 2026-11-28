@@ -960,6 +960,9 @@ html.overlay-window body {
   position: fixed;
   inset: 0;
   display: flex;
+  /* Dernière image du jeu (voir GameOverlay.tsx), étirée sur tout l'écran */
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
 /* Le jeu reste visible à gauche, assombri */
@@ -1066,6 +1069,29 @@ html.overlay-window body {
 
 .game-overlay-item.danger.selected .game-overlay-icon {
   color: var(--danger);
+}
+
+/* Question « Es-tu sûr de vouloir quitter ? » (Oui / Non) */
+.game-overlay-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.45;
+}
+
+.game-overlay-confirm p {
+  margin: 0;
+}
+
+.game-overlay-confirm-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.game-overlay-confirm-buttons .game-overlay-item {
+  flex: 1;
+  justify-content: center;
 }
 
 .game-overlay-help {
