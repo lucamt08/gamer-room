@@ -17,8 +17,29 @@ import { readSteamPlaytimes } from './steamPlaytime'
 const NOT_GAMES = /redistributable|proton|steam linux runtime|steamvr|dedicated server|\bsdk\b|soundtrack|benchmark/i
 const NOT_GAME_IDS = new Set([228980]) // Steamworks Common Redistributables
 
-/** Dossier d'installation de Steam, ou null si Steam n'est pas installé. */
+/** Dossier de Steam déjà trouvé, et quand (voir findSteamFolder). */
+let cachedFolder: { folder: string | null; at: number } | null = null
+/** Steam pas trouvé : on recherche au plus toutes les 5 minutes (au cas où on l'installe entre-temps). */
+const NOT_FOUND_RETRY = 5 * 60_000
+
+/**
+ * Dossier d'installation de Steam, ou null si Steam n'est pas installé.
+ * Gardé en mémoire : il est demandé toutes les 5 s (suivi des installations), et le lire dans le registre
+ * lance reg.exe en BLOQUANT l'appli (règle « processus principal = souris et clavier », voir CLAUDE.md).
+ * On le relit seulement si le dossier a disparu (Steam déplacé / désinstallé).
+ */
 export function findSteamFolder(): string | null {
+  if (cachedFolder) {
+    const { folder, at } = cachedFolder
+    if (folder ? existsSync(folder) : Date.now() - at < NOT_FOUND_RETRY) return folder
+  }
+  const folder = readSteamFolder()
+  cachedFolder = { folder, at: Date.now() }
+  return folder
+}
+
+/** Lit le dossier de Steam dans le registre (sinon l'emplacement par défaut). */
+function readSteamFolder(): string | null {
   try {
     const output = execFileSync('reg', ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamPath'], {
       encoding: 'utf8',
